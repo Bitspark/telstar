@@ -55,6 +55,8 @@ Install everything using `pip`
 pip install telstar
 ```
 
+#### The Producer - how to get data into the system
+
 Create a producer in our case this produces different message with the same data every .5 seconds
 ```python
 import redis
@@ -89,6 +91,7 @@ Start the producer with the following command
 REDIS_HOST=127.0.0.1 REDIS_PORT=6379 REDIS_PASSWORD= REDIS_DB=2 python producer.py
 ```
 
+#### The Consumer - how to get data out of the system
 Now lets creates consumer
 
 ```python
@@ -108,7 +111,7 @@ r = redis.Redis(host=os.environ.get("REDIS_HOST"),
                 db=int(os.environ.get("REDIS_DB")))
 
 def consumer(consumer, record: Message, done):
-    print(record)
+    print(record.__dict__)
     sleep(.5)
     done() # You need to call done otherwise we will get the same message over and over again
 
@@ -124,6 +127,14 @@ Now start the consumer as follows:
 ```bash
 STREAM_NAME=mytopic GROUP_NAME=mygroup2 CONSUMER_NAME=1 REDIS_HOST=127.0.0.1 REDIS_PORT=6379 REDIS_PASSWORD= REDIS_DB=2 python consumer.py
 ```
+You should see output like the following
+```bash
+{'stream': 'telstar:stream:mytopic', 'msg_uuid': b'64357230-8ff3-4eb9-8c06-757a42e961e2', 'data': {'key': 'value'}}
+{'stream': 'telstar:stream:mytopic', 'msg_uuid': b'a2443ae2-549e-49ab-9256-3f13575ba6ae', 'data': {'key': 'value'}}
+{'stream': 'telstar:stream:mytopic', 'msg_uuid': b'1c1d9f8c-e37b-43be-bab2-45caa10f233d', 'data': {'key': 'value'}}
+{'stream': 'telstar:stream:mytopic', 'msg_uuid': b'5da942ab-4aec-4a7f-bd93-a97168a8d3ad', 'data': {'key': 'value'}}
+```
+Until the stream is exhausted.
 
 ## 🔧 Running the tests <a name = "tests"></a>
 This package comes with an end to end test which simulates 
