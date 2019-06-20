@@ -30,7 +30,7 @@ jobs:
       - run:
           command: |
             source venv/bin/activate
-            pytest --ignore=telstar/ || true
+            pytest --ignore=telstar/
 
   simulate-telstar:
     working_directory: ~/telstar

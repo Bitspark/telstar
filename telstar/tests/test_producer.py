@@ -55,7 +55,7 @@ if __name__ == "__main__":
     def puller() -> Tuple[List[Message], Callable[[], None]]:
         qs = Events.select().order_by(peewee.fn.RAND()).limit(5)
         msgs = [Message(e.topic, e.msg_uid, e.data) for e in qs]
-
+        
         def done():
             if not os.environ.get("KEEPEVENTS"):
                 for r in qs:

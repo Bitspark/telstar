@@ -24,6 +24,7 @@
 
 import redis
 import json
+import uuid
 from functools import partial
 from . import Message
 
@@ -66,6 +67,12 @@ class Consumer(object):
         self.consumer_group = f"{self.stream_name}:{self.group_name}"
         self.consumer_name = f"cg:{self.consumer_group}:{self.consumer_name}"
         self.create_consumer()
+
+    def _seen_key(self, msg: Message):
+        return f"telstar:seen:{self.consumer_group}:{msg.msg_uuid}"
+
+    def _checkpoint_key(self):
+        return f"telstar:checkpoint:{self.consumer_name}"
 
     # A new consumer group for the given stream, if the stream does not exist yet
     # create one (`mkstream`) - if it does we want all messages present `id=0`
@@ -125,7 +132,7 @@ class Consumer(object):
             self.transfer_and_process_history()
 
     def get_last_seen_id(self):
-        check_point_key = f"telstar:checkpoint:{self.consumer_name}"
+        check_point_key = self._checkpoint_key()
         return self.link.get(check_point_key) or b"0-0"
 
     # Multiple things are happening here.
@@ -135,13 +142,13 @@ class Consumer(object):
     #    the UUID for 14 days
     # 3. Acknowledge the message to meaning that we have processed it
     def acknowledge(self, msg: Message, stream_msg_id):
-        check_point_key = f"telstar:checkpoint:{self.consumer_name}"
-        seen_key = f"telstar:seen:{self.consumer_group}:{msg.msg_uuid}"
-
+        check_point_key = self._checkpoint_key()
+        seen_key = self._seen_key(msg)
         # Execute the following statments in a transaction e.g. redis speak `pipeline`
         pipe = self.link.pipeline()
-        # If this key changes before we execute than the pipeline fails the ack fails and this the processor reverting all the work.
-        # which is exactly what we want in this case as the work has already been completed by another consumer.
+
+        # If this key changes before we execute the pipeline than the ack fails and this the processor reverts all the work.
+        # Which is exactly what we want in this case as the work has already been completed by another consumer.
         pipe.watch(seen_key)
 
         # Mark this as a seen key for 14 Days meaning if the message reappears after 14 days we reprocess it
@@ -155,7 +162,7 @@ class Consumer(object):
         pipe.execute()
 
     def work(self, stream_msg_id, record):
-        msg = Message(self.stream_name, record[Message.IDFieldName], json.loads(record[Message.DataFieldName]))
+        msg = Message(self.stream_name, uuid.UUID(record[Message.IDFieldName].decode("ascii")), json.loads(record[Message.DataFieldName]))
         key = f"telstar:seen:{self.consumer_group}:{msg.msg_uuid}"
         if self.link.get(key):
             # This is a double send
