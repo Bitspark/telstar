@@ -176,7 +176,7 @@ class Consumer(object):
         value = self.link.xreadgroup(self.group_name, self.consumer_name, {self.stream_name: start}, block=block)
         if not value:
             return 0
-        [[stream, records]] = value
+        [[_, records]] = value
         for record in records:
             stream_msg_id, record = record
             self.work(stream_msg_id, record)
