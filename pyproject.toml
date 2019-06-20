@@ -1,0 +1,11 @@
+[build-system]
+requires = ["flit"]
+build-backend = "flit.buildapi"
+
+[tool.flit.metadata]
+module = "telstar"
+author = "Bitspark"
+author-email = "kai.koenig@bitspark.de"
+home-page = "https://bitspark.de"
+classifiers = ["License :: OSI Approved :: MIT License"]
+

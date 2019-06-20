@@ -1,0 +1,99 @@
+version: 2.1
+
+jobs:
+  build:
+    working_directory: ~/telstar
+    docker:
+      - image: circleci/python:3.6
+    steps:
+      - checkout
+      - restore_cache:
+          key: v1-deps-{{ .Branch }}-{{ checksum "requirements.txt" }}
+      - run:
+          command: |
+            python3 -m venv venv
+            source venv/bin/activate
+            pip install -r requirements.txt
+      - save_cache:
+          key: v1-deps-{{ .Branch }}-{{ checksum "requirements.txt" }}
+          paths:
+            - "./venv"
+
+  test:
+    working_directory: ~/telstar
+    docker:
+      - image: circleci/python:3.6
+    steps:
+      - checkout
+      - restore_cache:
+          key: v1-deps-{{ .Branch }}-{{ checksum "requirements.txt" }}
+      - run:
+          command: |
+            source venv/bin/activate
+            pytest
+
+  simulate-telstar:
+    working_directory: ~/telstar
+    docker:
+      - image: circleci/python:3.6
+        environment: # environment variables for primary container
+          REDIS_PORT: 6379
+          REDIS_HOST: localhost
+          REDIS_DB: 10
+          DATABASE: mysql://root:root@127.0.0.1:3306/test
+
+      - image: circleci/redis:5-alpine
+      - image: circleci/mysql:8-ram
+        command: [--default-authentication-plugin=mysql_native_password]
+        environment:
+          MYSQL_DATABASE: test
+          MYSQL_ROOT_PASSWORD: root
+    steps:
+      - checkout
+      - restore_cache:
+          key: v1-deps-{{ .Branch }}-{{ checksum "requirements.txt" }}
+      - run:
+          command: |
+            sudo apt-get install mysql-client
+            source venv/bin/activate
+            dockerize -wait tcp://localhost:3306 -timeout 1m
+            ./telstar/tests/test_telstar.sh
+
+
+  release:
+    docker:
+      - image: circleci/python:3.6
+    working_directory: ~/telstar
+    steps:
+    - checkout
+    - restore_cache:
+        key: v1-deps-{{ .Branch }}-{{ checksum "requirements.txt" }}
+    - run:
+        command: |
+          source venv/bin/activate
+          flit publish
+
+
+
+workflows:
+  version: 2.1
+  build_and_test:
+    jobs:
+      - build
+
+      - test:
+          requires:
+            - build
+
+      - simulate-telstar:
+          requires:
+            - build
+
+      - release:
+          filters:
+            branches:
+              only:
+                - master
+          requires:
+            - test
+            - simulate-telstar
