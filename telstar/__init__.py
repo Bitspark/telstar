@@ -1,7 +1,7 @@
 """
 Telstar is a package to write producer and consumers groups against redis streams.
 """
-__version__ = "0.0.2"
+__version__ = "0.0.3"
 class Message(object):
     IDFieldName = b"message_id"
     DataFieldName = b"data"

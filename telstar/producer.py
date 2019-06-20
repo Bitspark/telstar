@@ -5,7 +5,7 @@ from . import Message
 
 
 class Producer(object):
-    def __init__(self, link, puller_fn: Callable[[], Tuple[List[Message], Callable[[], None]]], context_callable):
+    def __init__(self, link, puller_fn: Callable[[], Tuple[List[Message], Callable[[], None]]], context_callable=None):
         self.link = link
         self.puller_fn = puller_fn
         self.context_callable = context_callable
