@@ -13,7 +13,7 @@ class Producer(object):
     def run_once(self):
         records, done = self.puller_fn()
         for record in records:
-            self.add(record)
+            self.send(record)
         done()
 
     def run(self):
@@ -24,7 +24,7 @@ class Producer(object):
             else:
                 self.run_once()
 
-    def add(self, msg: Message):
+    def send(self, msg: Message):
         self.link.xadd(f"telstar:stream:{msg.stream}", {
             Message.IDFieldName: str(msg.msg_uuid),
             Message.DataFieldName: json.dumps(msg.data)})
