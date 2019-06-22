@@ -3,7 +3,7 @@ from time import sleep
 from typing import Callable, List, Tuple
 
 from . import Message
-from .com import StagedEvent
+from .com import StagedMessage
 
 
 class Producer(object):
@@ -36,19 +36,19 @@ class StagedProducer(Producer):
     def __init__(self, link, database, batch_size=5, wait=0.5):
         self.batch_size = batch_size
         self.wait = wait
-        StagedEvent.bind(database)
+        StagedMessage.bind(database)
 
-        super().__init__(link, self.create_puller(), StagedEvent._meta.database.atomic)
+        super().__init__(link, self.create_puller(), StagedMessage._meta.database.atomic)
 
     def create_puller(self):
         def puller() -> Tuple[List[Message], Callable[[], None]]:
-            qs = StagedEvent.unsent().limit(self.batch_size)
+            qs = StagedMessage.unsent().limit(self.batch_size)
             msgs = [e.to_msg() for e in qs]
 
             def done():
                 ids = list(map(lambda l: l.id, qs))
                 if ids:
-                    StagedEvent.update(sent=True).where(StagedEvent.id in ids).execute()
+                    StagedMessage.update(sent=True).where(StagedMessage.id in ids).execute()
                 sleep(self.wait)
 
             return msgs, done

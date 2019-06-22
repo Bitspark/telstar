@@ -8,7 +8,7 @@ import telstar
 from playhouse.db_url import connect
 from telstar import Message
 from telstar.consumer import Consumer
-from telstar.com import StagedEvent
+from telstar.com import StagedMessage
 from telstar.producer import StagedProducer
 
 
@@ -25,8 +25,8 @@ def consumer(link):
 @pytest.fixture
 def db():
     db = connect("sqlite:///:memory:")
-    db.bind([StagedEvent])
-    db.create_tables([StagedEvent])
+    db.bind([StagedMessage])
+    db.create_tables([StagedMessage])
     return db
 
 
@@ -55,7 +55,7 @@ def test_checkpoint_key(consumer: Consumer):
 
 def test_staged_event(db):
     telstar.stage("mytopic", dict(a=1))
-    assert len(StagedEvent.select().where(StagedEvent.topic == "mytopic")) == 1
+    assert len(StagedMessage.select().where(StagedMessage.topic == "mytopic")) == 1
 
 
 def test_staged_producer(db, link):

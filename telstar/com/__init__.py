@@ -13,7 +13,7 @@ class JSONField(peewee.TextField):
             return json.loads(value)
 
 
-class StagedEvent(peewee.Model):
+class StagedMessage(peewee.Model):
     msg_uid = peewee.UUIDField(default=uuid.uuid4, index=True)
     topic = peewee.CharField(index=True)
     data = JSONField()
@@ -23,7 +23,7 @@ class StagedEvent(peewee.Model):
 
     @classmethod
     def unsent(cls):
-        return cls.select().where(cls.sent == False)
+        return cls.select().where(cls.sent == False)  # noqa
 
     def to_msg(self):
         from .. import Message

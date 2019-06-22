@@ -3,18 +3,18 @@ Telstar is a package to write producer and consumers groups against redis stream
 """
 import uuid
 
-from .com import StagedEvent
+from .com import StagedMessage
 
 __version__ = "0.0.9"
 
 
 def stage(topic, data):
-    e = StagedEvent.create(topic=topic, data=data)
+    e = StagedMessage.create(topic=topic, data=data)
     return e.msg_uid
 
 
 def staged():
-    return [e.to_msg() for e in StagedEvent.unsent()]
+    return [e.to_msg() for e in StagedMessage.unsent()]
 
 
 class Message(object):
