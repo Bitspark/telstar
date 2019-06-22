@@ -1,8 +1,6 @@
 """
 Telstar is a package to write producer and consumers groups against redis streams.
 """
-import uuid
-
 from .com import StagedMessage
 
 __version__ = "0.0.9"

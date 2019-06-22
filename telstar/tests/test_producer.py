@@ -9,7 +9,8 @@ from typing import Callable, List, Tuple
 import peewee
 import redis
 from playhouse.db_url import connect
-from telstar.producer import Message, Producer
+from telstar.com import Message
+from telstar.producer import Producer
 
 
 class JSONField(peewee.TextField):
