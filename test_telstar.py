@@ -42,6 +42,6 @@ def test_checkpoint_key(consumer: Consumer):
     assert consumer._checkpoint_key() == "telstar:checkpoint:cg:telstar:stream:stream:group:name"
 
 def test_staged_event(db):
-    telstar.send("mytopic", dict(a=1))
+    telstar.stage("mytopic", dict(a=1))
     assert len(StagedEvent.select().where(StagedEvent.topic == "mytopic")) == 1
 

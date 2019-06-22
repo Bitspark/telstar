@@ -7,7 +7,7 @@ __version__ = "0.0.4"
 
 from .peewee import StagedEvent
 
-def send(topic, data):
+def stage(topic, data):
     StagedEvent.create(topic=topic, data=data)
 
 class Message(object):
