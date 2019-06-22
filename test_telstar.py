@@ -36,7 +36,7 @@ def test_seen_key(consumer: Consumer):
 def test_message_with_non_uuid():
     uid = "something random"
     with pytest.raises(TypeError):
-        m = Message("topic", uid , dict())
+        Message("topic", uid , dict())
 
 def test_checkpoint_key(consumer: Consumer):
     assert consumer._checkpoint_key() == "telstar:checkpoint:cg:telstar:stream:stream:group:name"
