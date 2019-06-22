@@ -5,6 +5,11 @@ import uuid
 
 __version__ = "0.0.4"
 
+from .peewee import StagedEvent
+
+def send(topic, data):
+    StagedEvent.create(topic=topic, data=data)
+
 class Message(object):
     IDFieldName = b"message_id"
     DataFieldName = b"data"

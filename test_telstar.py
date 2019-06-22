@@ -1,13 +1,26 @@
 import uuid
+from unittest import mock
+
 import pytest
 import redis
-from unittest import mock
+import telstar
+
+from playhouse.db_url import connect
 from telstar import Message
 from telstar.consumer import Consumer
+from telstar.peewee import StagedEvent
+
 
 @pytest.fixture
 def consumer():
     return Consumer(mock.MagicMock(spec=redis.Redis), "group", "name", "stream", lambda msg, done: done())
+
+@pytest.fixture
+def db():
+    db = connect("sqlite:///:memory:")
+    db.bind([StagedEvent])
+    db.create_tables([StagedEvent])
+    return db
 
 def test_message():
     uid = uuid.uuid4()
@@ -27,3 +40,8 @@ def test_message_with_non_uuid():
 
 def test_checkpoint_key(consumer: Consumer):
     assert consumer._checkpoint_key() == "telstar:checkpoint:cg:telstar:stream:stream:group:name"
+
+def test_staged_event(db):
+    telstar.send("mytopic", dict(a=1))
+    assert len(StagedEvent.select().where(StagedEvent.topic == "mytopic")) == 1
+
