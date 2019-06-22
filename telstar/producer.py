@@ -2,7 +2,7 @@ import json
 from time import sleep
 from typing import Callable, List, Tuple
 
-from . import Message
+from .com import Message
 from .com import StagedMessage
 
 

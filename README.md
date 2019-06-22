@@ -65,7 +65,7 @@ from uuid import uuid4
 from time import sleep
 
 from telstar.producer import Producer
-from telstar import Message
+from telstar.com import Message
 
 r = redis.Redis(host=os.environ.get("REDIS_HOST"),
                 port=os.environ.get("REDIS_PORT"),
@@ -100,7 +100,7 @@ import sys
 from time import sleep
 
 from telstar.consumer import Consumer
-from telstar import Message
+from telstar.com import Message
 
 import redis
 

@@ -6,7 +6,7 @@ import redis
 import telstar
 
 from playhouse.db_url import connect
-from telstar import Message
+from telstar.com import Message
 from telstar.consumer import Consumer
 from telstar.com import StagedMessage
 from telstar.producer import StagedProducer

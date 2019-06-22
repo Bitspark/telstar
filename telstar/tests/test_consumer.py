@@ -6,7 +6,7 @@ from time import sleep
 import peewee
 import redis
 from playhouse.db_url import connect
-from telstar import Message
+from telstar.com import Message
 from telstar.consumer import Consumer
 
 r = redis.Redis(host=os.environ.get("REDIS_HOST"),

@@ -28,7 +28,7 @@ from functools import partial
 
 import redis
 
-from . import Message
+from .com import Message
 
 # An important concept to understand here is the consumer group which give us the following consumer properties:
 # msg   -> consumer
@@ -164,7 +164,8 @@ class Consumer(object):
         pipe.execute()
 
     def work(self, stream_msg_id, record):
-        msg = Message(self.stream_name, uuid.UUID(record[Message.IDFieldName].decode("ascii")), json.loads(record[Message.DataFieldName]))
+        msg = Message(self.stream_name, uuid.UUID(record[Message.IDFieldName].decode("ascii")),
+                      json.loads(record[Message.DataFieldName]))
         key = f"telstar:seen:{self.consumer_group}:{msg.msg_uuid}"
         if self.link.get(key):
             # This is a double send

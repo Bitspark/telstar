@@ -26,5 +26,16 @@ class StagedMessage(peewee.Model):
         return cls.select().where(cls.sent == False)  # noqa
 
     def to_msg(self):
-        from .. import Message
         return Message(self.topic, self.msg_uid, self.data)
+
+
+class Message(object):
+    IDFieldName = b"message_id"
+    DataFieldName = b"data"
+
+    def __init__(self, stream: str, msg_uuid: uuid.UUID, data: dict):
+        if not isinstance(msg_uuid, uuid.UUID):
+            raise TypeError(f"msg_uuid needs to be uuid.UUID not {type(msg_uuid)}")
+        self.stream = stream
+        self.msg_uuid = msg_uuid
+        self.data = data
