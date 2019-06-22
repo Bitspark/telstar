@@ -32,9 +32,10 @@ class Producer(object):
 
 
 class StagedProducer(Producer):
-    def __init__(self, link, batch_size=5, wait=0.5):
+    def __init__(self, link, database, batch_size=5, wait=0.5):
         self.batch_size = batch_size
         self.wait = wait
+        StagedEvent.bind(database)
 
         super().__init__(link, self.create_puller(), StagedEvent._meta.database.atomic)
 

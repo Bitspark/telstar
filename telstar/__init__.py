@@ -3,7 +3,7 @@ Telstar is a package to write producer and consumers groups against redis stream
 """
 import uuid
 
-__version__ = "0.0.8"
+__version__ = "0.0.9"
 
 from .com import StagedEvent
 
