@@ -8,12 +8,17 @@ import telstar
 from playhouse.db_url import connect
 from telstar import Message
 from telstar.consumer import Consumer
-from telstar.peewee import StagedEvent
+from telstar.com import StagedEvent
+from telstar.producer import StagedProducer
 
 
 @pytest.fixture
-def consumer():
-    return Consumer(mock.MagicMock(spec=redis.Redis), "group", "name", "stream", lambda msg, done: done())
+def link():
+    return mock.MagicMock(spec=redis.Redis)
+
+@pytest.fixture
+def consumer(link):
+    return Consumer(link, "group", "name", "stream", lambda msg, done: done())
 
 @pytest.fixture
 def db():
@@ -45,3 +50,18 @@ def test_staged_event(db):
     telstar.stage("mytopic", dict(a=1))
     assert len(StagedEvent.select().where(StagedEvent.topic == "mytopic")) == 1
 
+def test_staged_producer(db, link):
+    telstar.stage("mytopic", dict(a=1))
+    [msgs], _ = StagedProducer(link).get_records()
+    assert msgs.stream == "mytopic"
+    assert msgs.data == dict(a=1)
+
+def test_staged_producer_done_callback_removes_staged_events(db, link):
+    telstar.stage("mytopic", dict(a=1))
+    msgs, cb = StagedProducer(link).get_records()
+    assert len(msgs) == 1
+    assert len(StagedEvent.select().where(StagedEvent.sent == True)) == 0
+    cb()
+    msgs, _ = StagedProducer(link).get_records()
+    assert len(msgs) == 0
+    assert len(StagedEvent.select().where(StagedEvent.sent == True)) == 1

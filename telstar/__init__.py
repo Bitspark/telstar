@@ -5,7 +5,7 @@ import uuid
 
 __version__ = "0.0.4"
 
-from .peewee import StagedEvent
+from .com import StagedEvent
 
 def stage(topic, data):
     StagedEvent.create(topic=topic, data=data)
