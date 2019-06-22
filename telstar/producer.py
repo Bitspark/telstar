@@ -5,6 +5,7 @@ from typing import Callable, List, Tuple
 from . import Message
 from .com import StagedEvent
 
+
 class Producer(object):
     def __init__(self, link, get_records: Callable[[], Tuple[List[Message], Callable[[], None]]], context_callable=None):
         self.link = link
@@ -41,8 +42,8 @@ class StagedProducer(Producer):
 
     def create_puller(self):
         def puller() -> Tuple[List[Message], Callable[[], None]]:
-            qs = StagedEvent.select().where(StagedEvent.sent == False).limit(self.batch_size)  # .first() # noqa
-            msgs = [Message(e.topic, e.msg_uid, e.data) for e in qs]
+            qs = StagedEvent.unsent().limit(self.batch_size)
+            msgs = [e.to_msg() for e in qs]
 
             def done():
                 ids = list(map(lambda l: l.id, qs))

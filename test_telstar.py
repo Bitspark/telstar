@@ -60,8 +60,8 @@ def test_staged_producer_done_callback_removes_staged_events(db, link):
     telstar.stage("mytopic", dict(a=1))
     msgs, cb = StagedProducer(link, db).get_records()
     assert len(msgs) == 1
-    assert len(StagedEvent.select().where(StagedEvent.sent == True)) == 0
+    assert len(telstar.staged()) == 1
     cb()
     msgs, _ = StagedProducer(link, db).get_records()
     assert len(msgs) == 0
-    assert len(StagedEvent.select().where(StagedEvent.sent == True)) == 1
+    assert len(telstar.staged()) == 0

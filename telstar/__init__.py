@@ -7,8 +7,15 @@ __version__ = "0.0.9"
 
 from .com import StagedEvent
 
+
 def stage(topic, data):
-    StagedEvent.create(topic=topic, data=data)
+    e = StagedEvent.create(topic=topic, data=data)
+    return e.msg_uid
+
+
+def staged():
+    return [e.to_msg() for e in StagedEvent.unsent()]
+
 
 class Message(object):
     IDFieldName = b"message_id"
