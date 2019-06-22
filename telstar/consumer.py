@@ -22,10 +22,12 @@
 #   http://charlesleifer.com/blog/multi-process-task-queue-using-redis-streams/
 #   http://charlesleifer.com/blog/redis-streams-with-python/
 
-import redis
 import json
 import uuid
 from functools import partial
+
+import redis
+
 from . import Message
 
 # An important concept to understand here is the consumer group which give us the following consumer properties:

@@ -1,16 +1,15 @@
-from playhouse.db_url import connect
-import os
 import json
-import redis
-import peewee
+import os
+import random
 import sys
 import uuid
-import random
-
 from time import sleep
-from telstar.producer import Producer, Message
+from typing import Callable, List, Tuple
 
-from typing import List, Tuple, Callable
+import peewee
+import redis
+from playhouse.db_url import connect
+from telstar.producer import Message, Producer
 
 
 class JSONField(peewee.TextField):
@@ -55,7 +54,7 @@ if __name__ == "__main__":
     def puller() -> Tuple[List[Message], Callable[[], None]]:
         qs = Events.select().order_by(peewee.fn.RAND()).limit(5)
         msgs = [Message(e.topic, e.msg_uid, e.data) for e in qs]
-        
+
         def done():
             if not os.environ.get("KEEPEVENTS"):
                 for r in qs:

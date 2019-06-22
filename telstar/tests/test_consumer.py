@@ -1,14 +1,13 @@
 import os
-import sys
 import random
-
-from telstar.consumer import Consumer
-from telstar import Message
-
-import redis
+import sys
 from time import sleep
+
 import peewee
+import redis
 from playhouse.db_url import connect
+from telstar import Message
+from telstar.consumer import Consumer
 
 r = redis.Redis(host=os.environ.get("REDIS_HOST"),
                 port=os.environ.get("REDIS_PORT"),
