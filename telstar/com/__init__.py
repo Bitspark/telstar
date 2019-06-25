@@ -5,17 +5,20 @@ import peewee
 from datetime import datetime
 
 
-class DateTimeEncoder(json.JSONEncoder):
+class TelstarEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, datetime):
             return o.isoformat()
+
+        if isinstance(o, uuid.UUID):
+            return str(o)
 
         return json.JSONEncoder.default(self, o)
 
 
 class JSONField(peewee.TextField):
     def db_value(self, value):
-        return json.dumps(value, cls=DateTimeEncoder)
+        return json.dumps(value, cls=TelstarEncoder)
 
     def python_value(self, value):
         if value is not None:

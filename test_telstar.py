@@ -71,11 +71,12 @@ def test_encoding_raises_correct_type_error(db, link):
         telstar.stage("mytopic", dict(dt=now, mock=mock.MagicMock()))
 
 
-def test_stage_can_encode_datetime_with_isoformat(db, link):
+def test_stage_can_encode_types(db, link):
     now = datetime.now()
-    telstar.stage("mytopic", dict(dt=now))
+    uid = uuid.uuid4()
+    telstar.stage("mytopic", dict(dt=now, uuid=uid))
     [msg], cb = StagedProducer(link, db).get_records()
-    assert msg.data == {"dt": now.isoformat()}
+    assert msg.data == {"dt": now.isoformat(), "uuid": str(uid)}
 
 
 def test_staged_producer_done_callback_removes_staged_events(db, link):
