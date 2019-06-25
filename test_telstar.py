@@ -65,6 +65,12 @@ def test_staged_producer(db, link):
     assert msgs.data == dict(a=1)
 
 
+def test_encoding_raises_correct_type_error(db, link):
+    now = datetime.now()
+    with pytest.raises(TypeError):
+        telstar.stage("mytopic", dict(dt=now, mock=mock.MagicMock()))
+
+
 def test_stage_can_encode_datetime_with_isoformat(db, link):
     now = datetime.now()
     telstar.stage("mytopic", dict(dt=now))

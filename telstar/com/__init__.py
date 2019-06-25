@@ -2,15 +2,20 @@ import json
 import uuid
 
 import peewee
+from datetime import datetime
 
 
-def datetime_json(o):
-    return o.isoformat() if hasattr(o, 'isoformat') else o
+class DateTimeEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, datetime):
+            return o.isoformat()
+
+        return json.JSONEncoder.default(self, o)
 
 
 class JSONField(peewee.TextField):
     def db_value(self, value):
-        return json.dumps(value, default=datetime_json)
+        return json.dumps(value, cls=DateTimeEncoder)
 
     def python_value(self, value):
         if value is not None:
