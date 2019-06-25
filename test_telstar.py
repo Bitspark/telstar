@@ -1,14 +1,14 @@
 import uuid
+from datetime import datetime
 from unittest import mock
 
 import pytest
 import redis
-import telstar
-
 from playhouse.db_url import connect
-from telstar.com import Message
+
+import telstar
+from telstar.com import Message, StagedMessage
 from telstar.consumer import Consumer
-from telstar.com import StagedMessage
 from telstar.producer import StagedProducer
 
 
@@ -63,6 +63,13 @@ def test_staged_producer(db, link):
     [msgs], _ = StagedProducer(link, db).get_records()
     assert msgs.stream == "mytopic"
     assert msgs.data == dict(a=1)
+
+
+def test_stage_can_encode_datetime_with_isoformat(db, link):
+    now = datetime.now()
+    telstar.stage("mytopic", dict(dt=now))
+    [msg], cb = StagedProducer(link, db).get_records()
+    assert msg.data == {"dt": now.isoformat()}
 
 
 def test_staged_producer_done_callback_removes_staged_events(db, link):

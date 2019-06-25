@@ -4,9 +4,13 @@ import uuid
 import peewee
 
 
+def datetime_json(o):
+    return o.isoformat() if hasattr(o, 'isoformat') else o
+
+
 class JSONField(peewee.TextField):
     def db_value(self, value):
-        return json.dumps(value)
+        return json.dumps(value, default=datetime_json)
 
     def python_value(self, value):
         if value is not None:
