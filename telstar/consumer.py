@@ -1,27 +1,3 @@
-# Strategies to build a consumer
-# Requirements:
-#   It must be able to deal with `at least once` delivery - any other guarantees are ridiculous
-#   It must be able to start multiple instance of the consumer without reading messages twice off the stream
-#
-#   There should be no delays or intervalling in processing the incoming data.
-#   Processing the data should be transactional meaning that if we fail to proccess the message it should not be marked as read.
-#   It must have strong error reporting as we want to be immdiatly informed if something goes haywire.
-#
-# Verification:
-#   * see tests/test.sh
-#
-# Read:
-#   https://walrus.readthedocs.io/en/latest/streams.html
-#   https://redis.io/topics/streams-intro
-#   https://github.com/tirkarthi/python-redis-streams-playground/blob/master/consumer.py
-#
-#   https://github.com/brandur/rocket-rides-unified/blob/master/consumer.rb
-#   https://brandur.org/redis-streams
-#
-#   https://github.com/coleifer/walrus
-#   http://charlesleifer.com/blog/multi-process-task-queue-using-redis-streams/
-#   http://charlesleifer.com/blog/redis-streams-with-python/
-
 import json
 import uuid
 from functools import partial
