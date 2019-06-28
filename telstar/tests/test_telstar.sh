@@ -25,22 +25,12 @@ readonly SCRIPTPATH="$(
     pwd -P
 )"
 
-function finish() {
-    echo "finishing"
-    jobs -p | xargs kill
-}
-
 function kill_childs_and_exit() {
     echo "Attempting to kill all childs"
     echo "..."
     pkill -P $$
     echo "ok, bye"
-    exit 1
 }
-
-# Upon exit kill all child procceses
-trap finish SIGINT
-trap finish EXIT
 
 # TRAP CTRL-C and kill all childs
 trap kill_childs_and_exit INT
@@ -61,7 +51,8 @@ main() {
     sleep 2
 
     # Start more consumers
-    CONSUMER_NAME=2 python $SCRIPTPATH/test_consumer.py &
+    # The `SLEEPINESS` will result in race conditions in the database, which is what we want for testing
+    SLEEPINESS=20 CONSUMER_NAME=2 python $SCRIPTPATH/test_consumer.py &
     CONSUMER_2=$!
 
     CONSUMER_NAME=3 python $SCRIPTPATH/test_consumer.py &
@@ -82,14 +73,14 @@ main() {
     PRODUCER_TWO=$!
 
     # Since CONSUMER_1 is in the background in already has consumed some messages from the stream
-    kill $CONSUMER_1
+    kill -0 $CONSUMER_1 && kill -9 $CONSUMER_1
 
     # Wait some more for  CONSUMER_2 and CONSUMER_3 to process more data.
     sleep 2
 
     # Let's kill the producer while it is sending
-    kill $PRODUCER_1
-    kill $PRODUCER_2
+    kill -0 $PRODUCER_1 && kill -9 $PRODUCER_1
+    kill -0 $PRODUCER_2 && kill -9 $PRODUCER_2
 
     # Now we restart CONSUMER_1
     CONSUMER_NAME=1 python $SCRIPTPATH/test_consumer.py &
@@ -99,8 +90,8 @@ main() {
     sleep 5
 
     # Kill more consumers
-    kill $CONSUMER_1
-    kill $CONSUMER_3
+    kill -0 $CONSUMER_1 && kill -9 $CONSUMER_1
+    kill -0 $CONSUMER_3 && kill -9 $CONSUMER_3
 
     # Oops all consumers are dead now
     kill $CONSUMER_2
@@ -115,24 +106,24 @@ main() {
 
     # Wait for `CONSUMER_4` to process all data
     sleep 30
-    kill $CONSUMER_4
-    kill $PRODUCER_3
+    kill -0 $CONSUMER_4 && kill -9 $CONSUMER_4
+    kill -0 $PRODUCER_3 && kill -9 $PRODUCER_3
 
-    kill $PRODUCER_TWO
+    kill -0 $PRODUCER_TWO && kill -9 $PRODUCER_TWO
 
     # Restart `CONSUMER_4` and kill it later
     CONSUMER_NAME=4 python $SCRIPTPATH/test_consumer.py &
     CONSUMER_4=$!
 
     sleep 30
-    kill $CONSUMER_4
+    kill -0 $CONSUMER_4 && kill -9 $CONSUMER_4
 
     # Create a new consumer group that reads everything from the beginning of time.
     SLEEPINESS=1 CONSUMER_NAME=4 GROUP_NAME=validation2 python $SCRIPTPATH/test_consumer.py &
     NEW_CONSUMER=$!
 
     sleep 10
-    kill $NEW_CONSUMER
+    kill -0 $NEW_CONSUMER && kill -9 $NEW_CONSUMER
 
     # Verify that the database hold the expected records
     python $SCRIPTPATH/_dbcontent.py | diff $SCRIPTPATH/expected.txt - || exit 1
@@ -142,8 +133,8 @@ main() {
     PENDING_STREAM_2=$(redis-cli -u $REDIS --csv XPENDING telstar:stream:$STREAM_NAME_TWO validation)
     PENDING_STREAM_3=$(redis-cli -u $REDIS --csv XPENDING telstar:stream:$STREAM_NAME_TWO validation2)
 
-    test $PENDING_STREAM_1 == "0,NIL,NIL,NIL" || echo "$STREAM_NAME validation has pending records" && exit 1
-    test $PENDING_STREAM_2 == "0,NIL,NIL,NIL" || echo "$STREAM_NAME validation2 has pending records" && exit 1
-    test $PENDING_STREAM_3 == "0,NIL,NIL,NIL" || echo "$STREAM_NAME_TWO validation2 has pending records" && exit 1
+    test "$PENDING_STREAM_1" == "0,NIL,NIL,NIL" || { echo "$STREAM_NAME validation has pending records" && exit 1; }
+    test "$PENDING_STREAM_2" == "0,NIL,NIL,NIL" || { echo "$STREAM_NAME validation2 has pending records" && exit 1; }
+    test "$PENDING_STREAM_3" == "0,NIL,NIL,NIL" || { echo "$STREAM_NAME_TWO validation2 has pending records" && exit 1; }
 }
 main

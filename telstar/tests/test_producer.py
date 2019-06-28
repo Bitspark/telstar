@@ -49,7 +49,7 @@ if __name__ == "__main__":
                 Events.create(topic=os.environ["STREAM_NAME"], data=dict(value=i))
 
     def puller() -> Tuple[List[Message], Callable[[], None]]:
-        qs = Events.select().order_by(peewee.fn.RAND()).limit(5)
+        qs = Events.select().order_by(Events.id).limit(5)
         msgs = [Message(e.topic, e.msg_uid, e.data) for e in qs]
 
         def done():

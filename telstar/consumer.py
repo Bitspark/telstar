@@ -35,6 +35,20 @@ class MultiConsumer(object):
 
         return bytes(f"{time}-{next_sequence}", "ascii")
 
+    @staticmethod
+    def decrement(id):
+        time, sequence = id.decode("ascii").split("-")
+        if not sequence:
+            raise Exception("Argument error, {id} has wrong format not #-#")
+        sequence = int(sequence)
+        time = int(time)
+        if sequence == 0:
+            time = time - 1
+        else:
+            sequence = int(sequence) - 1
+
+        return bytes(f"{time}-{sequence}", "ascii")
+
     def __init__(self, link: redis.Redis, group_name: str, consumer_name: str, config: dict, block=2000, claim_the_dead_after=20 * 1000):
         self.link = link
         self.block = block
@@ -69,8 +83,6 @@ class MultiConsumer(object):
     # In consumer groups, consumers can disappear, when they do they can leave non ack'ed message
     # which we want to claim and be delivered to a new consumer
     def claim_message_from_the_dead(self, stream_name: str):
-        consumer_name = self.get_consumer_name(stream_name)
-
         # Get information about all consumers in the group and how many messages are pending
         pending_info = self.link.xpending(stream_name, self.group_name)
         # {'pending': 10,
@@ -96,7 +108,10 @@ class MultiConsumer(object):
             # The pending messages are all our own no need to claim anything
             # This can happen when we simply restart a consumer with the same name
             return
-        claimed_messages = self.link.xclaim(stream_name, self.group_name, consumer_name, self.claim_the_dead_after, messages_to_claim, justid=True)
+
+        # It might be cheaper to claim *and* receive the message so we can work on them directly
+        # w/o catching up through the history with the potential of a lot of already seen keys.
+        claimed_messages = self.link.xclaim(stream_name, self.group_name, self.consumer_name, self.claim_the_dead_after, messages_to_claim, justid=True)
         return claimed_messages
 
     # We claim the message from other dead/non-responsive consumers.
@@ -110,7 +125,9 @@ class MultiConsumer(object):
             if stream_msg_ids:
                 # if there are message that we have claimed we need to determine where to start processing
                 # because we can't just wait for new message to arrive.
-                last_seen[stream_name] = min([min(stream_msg_ids), self.increment(last_seen[stream_name])])
+                before_earliest = self.decrement(min(stream_msg_ids))
+                next_after_seen = self.increment(last_seen[stream_name])
+                last_seen[stream_name] = min([before_earliest, next_after_seen])
         # Read all message for the past up until now.
         self.catchup(last_seen)
 
