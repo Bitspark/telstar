@@ -50,7 +50,7 @@ if __name__ == "__main__":
 
         if "create" in sys.argv[1:]:
             for i in range(int(os.environ["RANGE_FROM"]), int(os.environ["RANGE_TO"])):
-                Events.create(topic="test", data=dict(value=i))
+                Events.create(topic=os.environ["STREAM_NAME"], data=dict(value=i))
 
     def puller() -> Tuple[List[Message], Callable[[], None]]:
         qs = Events.select().order_by(peewee.fn.RAND()).limit(5)

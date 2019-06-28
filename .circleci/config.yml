@@ -55,6 +55,7 @@ jobs:
       - run:
           command: |
             sudo apt-get install mysql-client
+            sudo apt-get install redis-server
             source venv/bin/activate
             dockerize -wait tcp://localhost:3306 -timeout 1m
             ./telstar/tests/test_telstar.sh
