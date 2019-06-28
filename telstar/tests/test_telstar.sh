@@ -9,15 +9,13 @@
 
 # Configuration
 export STREAM_NAME="${STREAM_NAME:-mystream}"
+export STREAM_NAME_TWO="${STREAM_NAME_TWO:-mystream2}"
+
 export GROUP_NAME="${GROUP_NAME:-validation}"
 
 export SLEEPINESS="${SLEEPINESS:-10}"
 
-export REDIS_PASSWORD="${REDIS_PASSWORD:-}"
-export REDIS_PORT="${REDIS_PORT:-6379}"
-export REDIS_HOST="${REDIS_HOST:-localhost}"
-export REDIS_DB="${REDIS_DB:-10}"
-
+export REDIS="${REDIS:-redis://localhost:6379/10}"
 export DATABASE="${DATABASE:-mysql://root:root@127.0.0.1:3306/test}"
 
 export PYTHONPATH="${PYTHONPATH}:${SCRIPTPATH}../}"
@@ -49,7 +47,7 @@ trap kill_childs_and_exit INT
 if [ -x "$(command -v redis-cli)" ]; then
     # Clear redis only if available
     echo "flushing"
-    redis-cli -n $REDIS_DB FLUSHDB
+    redis-cli -u $REDIS FLUSHDB
 fi
 
 main() {
@@ -77,6 +75,10 @@ main() {
     # Create another producer that keeps double sending
     KEEPEVENTS=1 python $SCRIPTPATH/test_producer.py &
     PRODUCER_2=$!
+
+    # Create a producer that emits messages onto the second stream
+    RANGE_FROM=1 RANGE_TO=101 STREAM_NAME=$STREAM_NAME_TWO python $SCRIPTPATH/test_producer.py create &
+    PRODUCER_TWO=$!
 
     # Since CONSUMER_1 is in the background in already has consumed some messages from the stream
     kill $CONSUMER_1
@@ -115,6 +117,8 @@ main() {
     kill $CONSUMER_4
     kill $PRODUCER_3
 
+    kill $PRODUCER_TWO
+
     # Restart `CONSUMER_4` and kill it later
     CONSUMER_NAME=4 python $SCRIPTPATH/test_consumer.py &
     CONSUMER_4=$!
@@ -133,7 +137,12 @@ main() {
     python $SCRIPTPATH/_dbcontent.py | diff $SCRIPTPATH/expected.txt - || exit 1
 
     # Makre sure we do not have pending message left
-    test $(redis-cli -n 10 --csv XPENDING telstar:stream:$STREAM_NAME validation) == "0,NIL,NIL,NIL" || exit 1
-    test $(redis-cli -n 10 --csv XPENDING telstar:stream:$STREAM_NAME validation2) == "0,NIL,NIL,NIL" || exit 1
+    PENDING_STREAM_1=$(redis-cli -u $REDIS --csv XPENDING telstar:stream:$STREAM_NAME validation)
+    PENDING_STREAM_2=$(redis-cli -u $REDIS --csv XPENDING telstar:stream:$STREAM_NAME_TWO validation)
+    PENDING_STREAM_3=$(redis-cli -u $REDIS --csv XPENDING telstar:stream:$STREAM_NAME_TWO validation2)
+
+    test $PENDING_STREAM_1 == "0,NIL,NIL,NIL" || echo "$STREAM_NAME validation has pending records" && exit 1
+    test $PENDING_STREAM_2 == "0,NIL,NIL,NIL" || echo "$STREAM_NAME validation2 has pending records" && exit 1
+    test $PENDING_STREAM_3 == "0,NIL,NIL,NIL" || echo "$STREAM_NAME_TWO validation2 has pending records" && exit 1
 }
 main

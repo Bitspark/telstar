@@ -77,6 +77,24 @@ def test_consumer_run_callback(link: redis.Redis):
     assert called is True
 
 
+def test_consumer_checkpoint(link: redis.Redis):
+    msg_id: bytes = b"49ccc393-1594-4d06-b357-0e1f322300b2"
+
+    def callback(c, msg: Message, done):
+        done()
+
+    link.get.return_value = None
+    pipeline = mock.MagicMock(spec=redis.client.Pipeline)()
+    link.pipeline.return_value = pipeline
+    link.xreadgroup.return_value = [[
+        b"telstar:stream:mytopic", [["stream_msg_id", {b'message_id': msg_id, b"data": "{}"}]]
+    ]]
+    c = Consumer(link, "mygroup", "myname", "mytopic", callback)
+    c._once()
+    link.get.assert_any_call("telstar:checkpoint:telstar:stream:mytopic:cg:mygroup:myname")
+    pipeline.set.assert_called_with("telstar:checkpoint:telstar:stream:mytopic:cg:mygroup:myname", "stream_msg_id")
+
+
 def test_consumer_with_multiple_stearms(link):
     callback1 = mock.Mock()
     callback2 = mock.Mock()

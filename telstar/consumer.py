@@ -35,7 +35,7 @@ class MultiConsumer(object):
 
         return bytes(f"{time}-{next_sequence}", "ascii")
 
-    def __init__(self, link: redis.Redis, group_name: str, consumer_name: str, processor_config: dict, block=2000, claim_the_dead_after=20 * 1000):
+    def __init__(self, link: redis.Redis, group_name: str, consumer_name: str, config: dict, block=2000, claim_the_dead_after=20 * 1000):
         self.link = link
         self.block = block
         self.claim_the_dead_after = claim_the_dead_after
@@ -43,7 +43,7 @@ class MultiConsumer(object):
         self.group_name = group_name
 
         self.processors = {f"telstar:stream:{stream_name}": fn
-                           for stream_name, fn in processor_config.items()}
+                           for stream_name, fn in config.items()}
 
         self.streams = self.processors.keys()
         for stream_name in self.streams:
@@ -77,11 +77,9 @@ class MultiConsumer(object):
         #  'min': b'1560032216285-0',
         #  'max': b'1560032942270-0',
         #  'consumers': [{'name': b'cg-userSignUp.1', 'pending': 10}]}
-
         # Nothing to do
         if pending_info["pending"] == 0:
             return
-
         # Get all messages ids within that range and select the ones we want to claim and claim them
         # But only if they are pending for more than 20secs.
         pending_messages = self.link.xpending_range(stream_name, self.group_name,
@@ -92,12 +90,14 @@ class MultiConsumer(object):
         #    'time_since_delivered': 22020,
         #    'times_delivered': 1}
         #  ...]
-        messages_to_claim = [p["message_id"] for p in pending_messages if not p["consumer"].decode("ascii") == consumer_name]
+        messages_to_claim = [p["message_id"] for p in pending_messages]
+
         if not messages_to_claim:
             # The pending messages are all our own no need to claim anything
             # This can happen when we simply restart a consumer with the same name
             return
-        return self.link.xclaim(stream_name, self.group_name, consumer_name, self.claim_the_dead_after, messages_to_claim, justid=True)
+        claimed_messages = self.link.xclaim(stream_name, self.group_name, consumer_name, self.claim_the_dead_after, messages_to_claim, justid=True)
+        return claimed_messages
 
     # We claim the message from other dead/non-responsive consumers.
     # When new message have been claimed they are usually from the past
@@ -111,7 +111,6 @@ class MultiConsumer(object):
                 # if there are message that we have claimed we need to determine where to start processing
                 # because we can't just wait for new message to arrive.
                 last_seen[stream_name] = min([min(stream_msg_ids), self.increment(last_seen[stream_name])])
-
         # Read all message for the past up until now.
         self.catchup(last_seen)
 
@@ -139,7 +138,7 @@ class MultiConsumer(object):
     #    the UUID for 14 days
     # 3. Acknowledge the message to meaning that we have processed it
     def acknowledge(self, msg: Message, stream_msg_id):
-        check_point_key = self._checkpoint_key(msg.stream)
+        check_point_key = self._checkpoint_key(f"telstar:stream:{msg.stream}")
         seen_key = self._seen_key(msg)
         # Execute the following statments in a transaction e.g. redis speak `pipeline`
         pipe = self.link.pipeline()

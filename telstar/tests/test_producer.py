@@ -22,11 +22,7 @@ class JSONField(peewee.TextField):
             return json.loads(value)
 
 
-r = redis.Redis(host=os.environ.get("REDIS_HOST"),
-                port=os.environ.get("REDIS_PORT"),
-                password=os.environ.get("REDIS_PASSWORD"),
-                db=int(os.environ["REDIS_DB"]))
-
+link = redis.from_url(os.environ["REDIS"])
 db = connect(os.environ["DATABASE"])
 db.connect()
 
@@ -63,4 +59,4 @@ if __name__ == "__main__":
             sleep(random.randrange(int(os.environ.get("SLEEPINESS"))) / 10)
         return msgs, done
     print("starting")
-    Producer(r, puller, context_callable=db.atomic).run()
+    Producer(link, puller, context_callable=db.atomic).run()
