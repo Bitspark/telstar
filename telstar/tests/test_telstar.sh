@@ -26,6 +26,7 @@ readonly SCRIPTPATH="$(
 )"
 
 function finish() {
+    echo "finishing"
     jobs -p | xargs kill
 }
 
