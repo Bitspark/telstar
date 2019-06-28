@@ -48,6 +48,8 @@ class Message(object):
     def __init__(self, stream: str, msg_uuid: uuid.UUID, data: dict):
         if not isinstance(msg_uuid, uuid.UUID):
             raise TypeError(f"msg_uuid needs to be uuid.UUID not {type(msg_uuid)}")
-        self.stream = stream
+        if isinstance(stream, bytes):
+            stream = stream.decode("ascii")
+        self.stream = stream.replace("telstar:stream:", "")
         self.msg_uuid = msg_uuid
         self.data = data

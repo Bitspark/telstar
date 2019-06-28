@@ -39,8 +39,22 @@ def test_message():
 def test_seen_key(consumer: Consumer):
     uid_hex = "752884c3f7284cf19d3b9940373685f4"
     uid = uuid.UUID(uid_hex)
-    m = Message("topic", uid, dict())
-    assert consumer._seen_key(m) == "telstar:seen:telstar:stream:stream:group:752884c3-f728-4cf1-9d3b-9940373685f4"
+    m = Message("mytopic", uid, dict())
+    assert consumer._seen_key(m) == "telstar:seen:mytopic:mygroup:752884c3-f728-4cf1-9d3b-9940373685f4"
+
+
+def test_seen_key_bytes(consumer: Consumer):
+    uid_hex = "752884c3f7284cf19d3b9940373685f4"
+    uid = uuid.UUID(uid_hex)
+    m = Message(b"mytopic", uid, dict())
+    assert consumer._seen_key(m) == "telstar:seen:mytopic:mygroup:752884c3-f728-4cf1-9d3b-9940373685f4"
+
+
+def test_message_strip_telstar_prefix(consumer: Consumer):
+    uid_hex = "752884c3f7284cf19d3b9940373685f4"
+    uid = uuid.UUID(uid_hex)
+    m = Message(b"telstar:stream:mytopic", uid, dict())
+    assert consumer._seen_key(m) == "telstar:seen:mytopic:mygroup:752884c3-f728-4cf1-9d3b-9940373685f4"
 
 
 def test_message_with_non_uuid():
