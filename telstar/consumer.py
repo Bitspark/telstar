@@ -46,7 +46,7 @@ from .com import Message
 # This allows us to create N consumers w/o needing to figure out which message already has been processed.
 
 
-class Consumer(object):
+class MultiConsumer(object):
 
     @staticmethod
     def increment(id):
@@ -59,48 +59,56 @@ class Consumer(object):
 
         return bytes(f"{time}-{next_sequence}", "ascii")
 
-    def __init__(self, link, group_name, consumer_name, stream_name, processor_fn):
+    def __init__(self, link: redis.Redis, group_name: str, consumer_name: str, processor_config: dict, block=2000, claim_the_dead_after=20 * 1000):
         self.link = link
-        self.stream_name = f"telstar:stream:{stream_name}"
+        self.block = block
+        self.claim_the_dead_after = claim_the_dead_after
         self.consumer_name = consumer_name
         self.group_name = group_name
 
-        self.processor_fn = processor_fn
-        self.consumer_group = f"{self.stream_name}:{self.group_name}"
-        self.consumer_name = f"cg:{self.consumer_group}:{self.consumer_name}"
-        self.create_consumer()
+        self.processors = {f"telstar:stream:{stream_name}": fn
+                           for stream_name, fn in processor_config.items()}
+
+        self.streams = self.processors.keys()
+        for stream_name in self.streams:
+            self.create_consumer_group(stream_name)
+
+    def get_consumer_name(self, stream):
+        return f"cg:{self.group_name}:{self.consumer_name}"
 
     def _seen_key(self, msg: Message):
-        return f"telstar:seen:{self.consumer_group}:{msg.msg_uuid}"
+        return f"telstar:seen:{msg.stream}:{self.group_name}:{msg.msg_uuid}"
 
-    def _checkpoint_key(self):
-        return f"telstar:checkpoint:{self.consumer_name}"
+    def _checkpoint_key(self, stream: str):
+        return f"telstar:checkpoint:{stream}:{self.get_consumer_name(stream)}"
 
     # A new consumer group for the given stream, if the stream does not exist yet
     # create one (`mkstream`) - if it does we want all messages present `id=0`
-    def create_consumer(self):
+    def create_consumer_group(self, stream_name: str):
         try:
-            self.link.xgroup_create(self.stream_name, self.group_name, mkstream=True, id="0")
+            self.link.xgroup_create(stream_name, self.group_name, mkstream=True, id="0")
         except redis.exceptions.ResponseError:
-            pass  # The group already exists
+            pass
 
     # In consumer groups, consumers can disappear, when they do they can leave non ack'ed message
-    # which we want to claim and be delivered to us.
-    def claim_message_from_the_dead(self):
+    # which we want to claim and be delivered to a new consumer
+    def claim_message_from_the_dead(self, stream_name: str):
+        consumer_name = self.get_consumer_name(stream_name)
+
         # Get information about all consumers in the group and how many messages are pending
-        pending_info = self.link.xpending(self.stream_name, self.group_name)
+        pending_info = self.link.xpending(stream_name, self.group_name)
         # {'pending': 10,
         #  'min': b'1560032216285-0',
         #  'max': b'1560032942270-0',
         #  'consumers': [{'name': b'cg-userSignUp.1', 'pending': 10}]}
 
-        # Nothing to see here
+        # Nothing to do
         if pending_info["pending"] == 0:
             return
 
-        # Now get all messages ids within that range and select the ones we want to claim and claim them
+        # Get all messages ids within that range and select the ones we want to claim and claim them
         # But only if they are pending for more than 20secs.
-        pending_messages = self.link.xpending_range(self.stream_name, self.group_name,
+        pending_messages = self.link.xpending_range(stream_name, self.group_name,
                                                     pending_info["min"], pending_info["max"], pending_info["pending"])
         # [
         #   {'message_id': b'1560194528886-0',
@@ -108,33 +116,44 @@ class Consumer(object):
         #    'time_since_delivered': 22020,
         #    'times_delivered': 1}
         #  ...]
-        messages_to_claim = [p["message_id"] for p in pending_messages if not p["consumer"].decode("ascii") == self.consumer_name]
+        messages_to_claim = [p["message_id"] for p in pending_messages if not p["consumer"].decode("ascii") == consumer_name]
         if not messages_to_claim:
-            return  # The pending messages are all our own no need to claim anything
-        return self.link.xclaim(self.stream_name, self.group_name, self.consumer_name, 20 * 1000, messages_to_claim, justid=True)
+            # The pending messages are all our own no need to claim anything
+            # This can happen when we simply restart a consumer with the same name
+            return
+        return self.link.xclaim(stream_name, self.group_name, consumer_name, self.claim_the_dead_after, messages_to_claim, justid=True)
 
     # We claim the message from other dead/non-responsive consumers.
-    # When new message have been claimed they are usually from the past which
+    # When new message have been claimed they are usually from the past
     # which means in order to process them we need to start processing our history.
-    def transfer_and_process_history(self):
-        start = self.get_last_seen_id()
-        stream_msg_ids = self.claim_message_from_the_dead()
-        if stream_msg_ids:
-            start = min([min(stream_msg_ids), self.increment(start)])
-            print(start)
-            # start = b"0-0"  # This is strange is it means we want to reprocess everything - including what we have seen sofar
-        self.catchup(start=start)
+    def transfer_and_process_stream_history(self, streams: list):
+        last_seen = dict()
+        for stream_name in streams:
+            last_seen[stream_name] = self.get_last_seen_id(stream_name)
+            stream_msg_ids = self.claim_message_from_the_dead(stream_name)
+            if stream_msg_ids:
+                # if there are message that we have claimed we need to determine where to start processing
+                # because we can't just wait for new message to arrive.
+                last_seen[stream_name] = min([min(stream_msg_ids), self.increment(last_seen[stream_name])])
+
+        # Read all message for the past up until now.
+        self.catchup(last_seen)
 
     # This is the main loop where we start from the history
     # and claim message and reprocess our history.
+    # We also loop the transfer_and_process_history as other consumers might have died while we waited
     def run(self):
-        self.transfer_and_process_history()
         while True:
-            self.subscribe()  # block for 2 secs.
-            self.transfer_and_process_history()
+            self._once()
 
-    def get_last_seen_id(self):
-        check_point_key = self._checkpoint_key()
+    def _once(self):
+        self.transfer_and_process_stream_history(self.streams)
+        # With our history processes we can now start waiting for new message to arrive `>`
+        config = {k: ">" for k in self.streams}
+        self.read(config, block=self.block)
+
+    def get_last_seen_id(self, stream_name: str):
+        check_point_key = self._checkpoint_key(stream_name)
         return self.link.get(check_point_key) or b"0-0"
 
     # Multiple things are happening here.
@@ -144,7 +163,7 @@ class Consumer(object):
     #    the UUID for 14 days
     # 3. Acknowledge the message to meaning that we have processed it
     def acknowledge(self, msg: Message, stream_msg_id):
-        check_point_key = self._checkpoint_key()
+        check_point_key = self._checkpoint_key(msg.stream)
         seen_key = self._seen_key(msg)
         # Execute the following statments in a transaction e.g. redis speak `pipeline`
         pipe = self.link.pipeline()
@@ -160,34 +179,42 @@ class Consumer(object):
         pipe.set(check_point_key, stream_msg_id)
 
         # Acknowledge the actual message
-        pipe.xack(self.stream_name, self.group_name, stream_msg_id)
+        pipe.xack(f"telstar:stream:{msg.stream}", self.group_name, stream_msg_id)
         pipe.execute()
 
-    def work(self, stream_msg_id, record):
-        msg = Message(self.stream_name, uuid.UUID(record[Message.IDFieldName].decode("ascii")),
+    def work(self, stream_name, stream_msg_id, record):
+        msg = Message(stream_name,
+                      uuid.UUID(record[Message.IDFieldName].decode("ascii")),
                       json.loads(record[Message.DataFieldName]))
-        key = f"telstar:seen:{self.consumer_group}:{msg.msg_uuid}"
+        done = partial(self.acknowledge, msg, stream_msg_id)
+        key = self._seen_key(msg)
         if self.link.get(key):
             # This is a double send
-            self.acknowledge(msg, stream_msg_id)
-            return
+            return done()
 
-        self.processor_fn(self, msg, done=partial(self.acknowledge, msg, stream_msg_id))
+        self.processors[stream_name.decode("ascii")](self, msg, done)
 
     # Process all message from `start`
-    def catchup(self, start):
-        return self._xread(start)
+    def catchup(self, streams):
+        return self._xreadgroup(streams)
 
     # Process wait for new messages
-    def subscribe(self):
-        return self._xread(">", block=2000)
+    def read(self, streams, block):
+        return self._xreadgroup(streams, block=block)
 
-    def _xread(self, start, block=0):
-        value = self.link.xreadgroup(self.group_name, self.consumer_name, {self.stream_name: start}, block=block)
+    def _xreadgroup(self, streams, block=0):
+        processed = 0
+        value = self.link.xreadgroup(self.group_name, self.consumer_name, streams, block=block)
         if not value:
             return 0
-        [[_, records]] = value
-        for record in records:
-            stream_msg_id, record = record
-            self.work(stream_msg_id, record)
-        return len(records)
+        for stream_name, records in value:
+            for record in records:
+                stream_msg_id, record = record
+                self.work(stream_name, stream_msg_id, record)
+                processed = processed + 1
+        return processed
+
+
+class Consumer(MultiConsumer):
+    def __init__(self, link, group_name, consumer_name, stream_name, processor_fn):
+        super().__init__(link, group_name, consumer_name, {stream_name: processor_fn})

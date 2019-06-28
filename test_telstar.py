@@ -8,18 +8,18 @@ from playhouse.db_url import connect
 
 import telstar
 from telstar.com import Message, StagedMessage
-from telstar.consumer import Consumer
+from telstar.consumer import Consumer, MultiConsumer
 from telstar.producer import StagedProducer
 
 
 @pytest.fixture
-def link():
+def link() -> redis.Redis:
     return mock.MagicMock(spec=redis.Redis)
 
 
 @pytest.fixture
 def consumer(link):
-    return Consumer(link, "group", "name", "stream", lambda msg, done: done())
+    return Consumer(link, "mygroup", "myname", "mytopic", lambda msg, done: done())
 
 
 @pytest.fixture
@@ -34,6 +34,74 @@ def test_message():
     uid = uuid.uuid4()
     m = Message("topic", uid, dict())
     assert m.msg_uuid == uid
+
+
+def test_consumer_create_group(link):
+    Consumer(link, "mygroup", "myname", "mytopic", lambda msg, done: done())
+    link.xgroup_create.assert_called_once_with('telstar:stream:mytopic', 'mygroup', id='0', mkstream=True)
+
+
+def test_consumer_run(link: redis.Redis):
+    callback = mock.Mock()
+    msg_id = str(uuid.uuid4()).encode("ascii")
+    link.get.return_value = None
+    link.xreadgroup.return_value = [[
+        b"telstar:stream:mytopic", [["stream_msg_id", {b'message_id': msg_id, b"data": "{}"}]]
+    ]]
+    c = Consumer(link, "mygroup", "myname", "mytopic", callback)
+    c.transfer_and_process_stream_history = lambda *a, **kw: None
+    c._once()
+    callback.assert_called()
+
+
+def test_consumer_run_callback(link: redis.Redis):
+    called = False
+    msg_id: bytes = str(uuid.uuid4()).encode("ascii")
+
+    def callback(c, msg: Message, done):
+        nonlocal called, msg_id
+        called = True
+        assert msg.msg_uuid == uuid.UUID(msg_id.decode("ascii"))
+        assert msg.data == {}
+        assert msg.stream == "mytopic"
+        done()
+
+    link.get.return_value = None
+    link.xreadgroup.return_value = [[
+        b"telstar:stream:mytopic", [["stream_msg_id", {b'message_id': msg_id, b"data": "{}"}]]
+    ]]
+    c = Consumer(link, "mygroup", "myname", "mytopic", callback)
+    c.transfer_and_process_stream_history = lambda *a, **kw: None
+    c._once()
+
+    assert called is True
+
+
+def test_consumer_with_multiple_stearms(link):
+    callback1 = mock.Mock()
+    callback2 = mock.Mock()
+
+    config = {
+        "mytopic1": callback1,
+        "mytopic2": callback2
+    }
+    msg_id = str(uuid.uuid4()).encode("ascii")
+    link.get.return_value = None
+    link.xreadgroup.return_value = [
+        [b"telstar:stream:mytopic1", [
+            ["stream_msg_id1", {b'message_id': msg_id, b"data": "{}"}],
+            ["stream_msg_id2", {b'message_id': msg_id, b"data": "{}"}]
+        ]],
+
+        [b"telstar:stream:mytopic2", [["stream_msg_id", {b'message_id': msg_id, b"data": "{}"}]]]
+    ]
+
+    mc = MultiConsumer(link, "group", "name", config)
+    mc.transfer_and_process_stream_history = lambda *a, **kw: None
+    mc._once()
+
+    assert callback1.call_count == 2
+    assert callback2.call_count == 1
 
 
 def test_seen_key(consumer: Consumer):
@@ -60,11 +128,11 @@ def test_message_strip_telstar_prefix(consumer: Consumer):
 def test_message_with_non_uuid():
     uid = "something random"
     with pytest.raises(TypeError):
-        Message("topic", uid, dict())
+        Message("mytopic", uid, dict())
 
 
 def test_checkpoint_key(consumer: Consumer):
-    assert consumer._checkpoint_key() == "telstar:checkpoint:cg:telstar:stream:stream:group:name"
+    assert consumer._checkpoint_key("mytopic") == "telstar:checkpoint:mytopic:cg:mygroup:myname"
 
 
 def test_staged_event(db):
