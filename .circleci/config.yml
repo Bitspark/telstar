@@ -53,7 +53,13 @@ jobs:
       - run:
           command: |
             sudo apt-get install mysql-client
-            sudo apt-get install redis-server
+            cd /tmp
+            wget http://download.redis.io/redis-stable.tar.gz
+            tar xvzf redis-stable.tar.gz
+            cd redis-stable
+            make redis-cli
+            sudo cp src/redis-cli /usr/local/bin/
+            sudo chmod 755 /usr/local/bin/redis-cli
             source venv/bin/activate
             dockerize -wait tcp://localhost:3306 -timeout 1m
             ./telstar/tests/test_telstar.sh
