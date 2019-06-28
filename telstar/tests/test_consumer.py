@@ -7,13 +7,9 @@ import peewee
 import redis
 from playhouse.db_url import connect
 from telstar.com import Message
-from telstar.consumer import Consumer
+from telstar.consumer import MultiConsumer
 
-r = redis.Redis(host=os.environ.get("REDIS_HOST"),
-                port=os.environ.get("REDIS_PORT"),
-                password=os.environ.get("REDIS_PASSWORD"),
-                db=int(os.environ.get("REDIS_DB")))
-
+link = redis.from_url(os.environ["REDIS"])
 db = connect(os.environ["DATABASE"])
 db.connect()
 
@@ -21,10 +17,11 @@ db.connect()
 class Test(peewee.Model):
     number = peewee.IntegerField()
     group_name = peewee.CharField()
+    topic = peewee.CharField()
 
     class Meta:
         indexes = (
-            (('number', 'group_name'), True),
+            (('number', 'group_name', 'topic'), True),
         )
         database = db
 
@@ -38,12 +35,14 @@ if __name__ == "__main__":
 
     def simple(consumer, record: Message, done):
         with db.atomic():
-            Test.create(number=int(record.data["value"]), group_name=consumer.group_name)
+            Test.create(number=int(record.data["value"]), group_name=consumer.group_name, topic=record.stream)
             sleep(random.randrange(int(os.environ.get("SLEEPINESS"))) / 100)
             done()
 
-    Consumer(link=r,
-             stream_name=os.environ.get("STREAM_NAME"),
-             group_name=os.environ.get("GROUP_NAME"),
-             consumer_name=os.environ.get("CONSUMER_NAME"),
-             processor_fn=simple).run()
+    MultiConsumer(link=link,
+                  group_name=os.environ.get("GROUP_NAME"),
+                  consumer_name=os.environ.get("CONSUMER_NAME"),
+                  config={
+                      os.environ["STREAM_NAME"]: simple,
+                      os.environ["STREAM_NAME_TWO"]: simple
+                  }).run()
