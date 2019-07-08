@@ -3,7 +3,7 @@ Telstar is a package to write producer and consumers groups against redis stream
 """
 from .com import StagedMessage
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 
 def stage(topic, data):

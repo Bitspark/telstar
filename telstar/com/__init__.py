@@ -53,3 +53,6 @@ class Message(object):
         self.stream = stream.replace("telstar:stream:", "")
         self.msg_uuid = msg_uuid
         self.data = data
+
+    def __repr__(self):
+        return f"<Message self.stream:{self.stream} msd_id:{self.msg_uuid} data:{self.data}>"
