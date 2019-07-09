@@ -19,6 +19,7 @@ export REDIS="${REDIS:-redis://localhost:6379/10}"
 export DATABASE="${DATABASE:-mysql://root:root@127.0.0.1:3306/test}"
 
 export PYTHONPATH="${PYTHONPATH}:${SCRIPTPATH}../}"
+export PYTHONUNBUFFERED=True
 
 readonly SCRIPTPATH="$(
     cd "$(dirname "$0")"
@@ -30,6 +31,7 @@ function kill_childs_and_exit() {
     echo "..."
     pkill -P $$
     echo "ok, bye"
+    exit 1
 }
 
 # TRAP CTRL-C and kill all childs

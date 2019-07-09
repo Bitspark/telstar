@@ -1,3 +1,4 @@
+import logging
 import os
 import random
 import sys
@@ -6,12 +7,17 @@ from time import sleep
 import peewee
 import redis
 from playhouse.db_url import connect
+
 from telstar.com import Message
 from telstar.consumer import MultiConsumer
 
 link = redis.from_url(os.environ["REDIS"])
 db = connect(os.environ["DATABASE"])
 db.connect()
+
+logger = logging.getLogger('telstar')
+logger.addHandler(logging.StreamHandler())
+logger.setLevel(logging.DEBUG)
 
 
 class Test(peewee.Model):
