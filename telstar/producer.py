@@ -1,9 +1,11 @@
 import json
+import logging
 from time import sleep
 from typing import Callable, List, Tuple
 
-from .com import Message
-from .com import StagedMessage
+from .com import Message, StagedMessage
+
+log = logging.getLogger(__name__)
 
 
 class Producer(object):
@@ -19,6 +21,7 @@ class Producer(object):
         done()
 
     def run(self):
+        log.info("Starting main producer loop")
         while True:
             if callable(self.context_callable):
                 with self.context_callable():
@@ -44,10 +47,12 @@ class StagedProducer(Producer):
         def puller() -> Tuple[List[Message], Callable[[], None]]:
             qs = StagedMessage.unsent().limit(self.batch_size)
             msgs = [e.to_msg() for e in qs]
+            log.debug(f"Found {len(msgs)} messages to be send")
 
             def done():
                 ids = list(map(lambda l: l.id, qs))
                 if ids:
+                    log.debug(f"Attempting to mark {len(msgs)} messages as being sent")
                     StagedMessage.update(sent=True).where(StagedMessage.id in ids).execute()
                 sleep(self.wait)
 

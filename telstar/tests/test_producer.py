@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import random
 import sys
@@ -9,8 +10,17 @@ from typing import Callable, List, Tuple
 import peewee
 import redis
 from playhouse.db_url import connect
+
 from telstar.com import Message
 from telstar.producer import Producer
+
+link = redis.from_url(os.environ["REDIS"])
+db = connect(os.environ["DATABASE"])
+db.connect()
+
+logger = logging.getLogger('telstar')
+logger.addHandler(logging.StreamHandler())
+logger.setLevel(logging.DEBUG)
 
 
 class JSONField(peewee.TextField):
@@ -20,11 +30,6 @@ class JSONField(peewee.TextField):
     def python_value(self, value):
         if value is not None:
             return json.loads(value)
-
-
-link = redis.from_url(os.environ["REDIS"])
-db = connect(os.environ["DATABASE"])
-db.connect()
 
 
 class Events(peewee.Model):

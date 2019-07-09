@@ -1,4 +1,5 @@
 import json
+import logging
 import uuid
 from functools import partial
 
@@ -20,6 +21,8 @@ from .com import Message
 # Which basically means that inside a group a single consumer will only get message the others have not yet seen.
 # For a deep dive read to this -> https://redis.io/topics/streams-intro
 # This allows us to create N consumers w/o needing to figure out which message already has been processed.
+
+log = logging.getLogger(__name__)
 
 
 class MultiConsumer(object):
@@ -78,7 +81,7 @@ class MultiConsumer(object):
         try:
             self.link.xgroup_create(stream_name, self.group_name, mkstream=True, id="0")
         except redis.exceptions.ResponseError:
-            pass
+            log.debug(f"Group: {self.group_name} for stream: {stream_name} already exists")
 
     # In consumer groups, consumers can disappear, when they do they can leave non ack'ed message
     # which we want to claim and be delivered to a new consumer
@@ -111,7 +114,9 @@ class MultiConsumer(object):
 
         # It might be cheaper to claim *and* receive the message so we can work on them directly
         # w/o catching up through the history with the potential of a lot of already seen keys.
+        log.debug(f"Attempting to claim: {len(messages_to_claim)} messages")
         claimed_messages = self.link.xclaim(stream_name, self.group_name, self.consumer_name, self.claim_the_dead_after, messages_to_claim, justid=True)
+        log.debug(f"Claimed: {len(claimed_messages)} messages from {stream_name}")
         return claimed_messages
 
     # We claim the message from other dead/non-responsive consumers.
@@ -135,6 +140,7 @@ class MultiConsumer(object):
     # and claim message and reprocess our history.
     # We also loop the transfer_and_process_history as other consumers might have died while we waited
     def run(self):
+        log.info("Starting main consumer loop")
         while True:
             self._once()
 
@@ -142,6 +148,7 @@ class MultiConsumer(object):
         self.transfer_and_process_stream_history(self.streams)
         # With our history processes we can now start waiting for new message to arrive `>`
         config = {k: ">" for k in self.streams}
+        log.info(f"Awaiting new messages on Stream:{self.streams} as Consumer: {self.consumer_name} in Group: {self.group_name}")
         self.read(config, block=self.block)
 
     def get_last_seen_id(self, stream_name: str):
@@ -155,6 +162,7 @@ class MultiConsumer(object):
     #    the UUID for 14 days
     # 3. Acknowledge the message to meaning that we have processed it
     def acknowledge(self, msg: Message, stream_msg_id):
+        log.debug(f"Acknowledging message {msg.msg_uuid} - {stream_msg_id}")
         check_point_key = self._checkpoint_key(f"telstar:stream:{msg.stream}")
         seen_key = self._seen_key(msg)
         # Execute the following statments in a transaction e.g. redis speak `pipeline`
@@ -182,8 +190,10 @@ class MultiConsumer(object):
         key = self._seen_key(msg)
         if self.link.get(key):
             # This is a double send
+            log.debug(f"Message: {msg.msg_uuid} was already processed in Group: {self.group_name} - {stream_msg_id}")
             return done()
 
+        log.debug(f"Processing message: {msg.msg_uuid} - {stream_msg_id}")
         self.processors[stream_name.decode("ascii")](self, msg, done)
 
     # Process all message from `start`
