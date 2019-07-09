@@ -134,6 +134,7 @@ class MultiConsumer(object):
                 next_after_seen = self.increment(last_seen[stream_name])
                 last_seen[stream_name] = min([before_earliest, next_after_seen])
         # Read all message for the past up until now.
+        log.info(f"Read messages from the past on Stream:{last_seen} as Consumer: {self.consumer_name} in Group: {self.group_name}")
         self.catchup(last_seen)
 
     # This is the main loop where we start from the history
@@ -193,7 +194,7 @@ class MultiConsumer(object):
             log.debug(f"Message: {msg.msg_uuid} was already processed in Group: {self.group_name} - {stream_msg_id}")
             return done()
 
-        log.debug(f"Processing message: {msg.msg_uuid} - {stream_msg_id}")
+        log.info(f"Processing message: {msg.msg_uuid} - {stream_msg_id}")
         self.processors[stream_name.decode("ascii")](self, msg, done)
 
     # Process all message from `start`
