@@ -53,7 +53,7 @@ class StagedProducer(Producer):
                 ids = list(map(lambda l: l.id, qs))
                 if ids:
                     log.debug(f"Attempting to mark {len(ids)} messages as being sent")
-                    result = StagedMessage.update(sent=True).where(StagedMessage.id in ids).execute()
+                    result = StagedMessage.update(sent=True).where(StagedMessage.id << ids).execute()
                     log.debug(f"Result was: {result}")
                 sleep(self.wait)
 

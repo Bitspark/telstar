@@ -181,10 +181,11 @@ def test_stage_can_encode_types(db, link):
 
 def test_staged_producer_done_callback_removes_staged_events(db, link):
     telstar.stage("mytopic", dict(a=1))
-    msgs, cb = StagedProducer(link, db).get_records()
+    telstar.stage("mytopic", dict(a=1))
+    msgs, cb = StagedProducer(link, db, batch_size=1).get_records()
     assert len(msgs) == 1
-    assert len(telstar.staged()) == 1
+    assert len(telstar.staged()) == 2
     cb()
     msgs, _ = StagedProducer(link, db).get_records()
-    assert len(msgs) == 0
-    assert len(telstar.staged()) == 0
+    assert len(msgs) == 1
+    assert len(telstar.staged()) == 1
