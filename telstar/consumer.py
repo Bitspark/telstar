@@ -273,3 +273,20 @@ class MultiConsumeOnce(MultiConsumer):
         if not self.has_pending_message():
             self.mark_as_applied()
         return num_processed
+
+
+class ThreadedMultiConsumer:
+    def __init__(self, link: redis.Redis, consumer_name: str, config: dict, **kw):
+        self.consumers = list()
+        for group_name, config in config.items():
+            self.consumers.append(MultiConsumer(link, group_name, consumer_name, config, **kw))
+
+    def run(self):
+        threads = list()
+        for c in self.consumers:
+            t = threading.Thread(target=c.run, daemon=True)
+            t.start()
+            threads.append(t)
+
+        for t in threads:
+            t.join()
