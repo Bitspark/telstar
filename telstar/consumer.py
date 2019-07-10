@@ -1,7 +1,8 @@
 import json
 import logging
-import uuid
+import threading
 import time
+import uuid
 from functools import partial
 
 import redis
@@ -244,14 +245,31 @@ class MultiConsumeOnce(MultiConsumer):
         key = self._applied_key()
         return self.link.set(key, int(time.time()))
 
+    def has_pending_message(self):
+        for stream_name in self.streams:
+            if self.link.xpending(stream_name, self.group_name)["pending"] != 0:
+                return True
+        return False
+
     def run(self):
+        num_processed = 0
         if self.is_applied():
             log.info(f"Not running Group: {self.group_name} for Streams: {self.streams} as it already ran")
-            return
-        # Reading a stream from ">" has a special meaning, it instructs redis to send all messages to the group
-        # Which does two things first it puts them all into the pending list of that consumer inside the group
-        # and also delivers them to the client.
-        streams = {s: ">" for s in self.streams}
-        num_processed = self.read(streams, 0)
-        self.mark_as_applied()
+            return num_processed
+
+        # This is the first time we try to apply this.
+        if not self.has_pending_message():
+            # Reading a stream from ">" has a special meaning, it instructs redis to send all messages to the group
+            # Which does two things first it puts them all into the pending list of that consumer inside the group
+            # and also delivers them to the client.
+            streams = {s: ">" for s in self.streams}
+            num_processed = self.read(streams, 0)
+        else:
+            # Now the data as already been delivered to the group we can now start reading from the beginning
+            streams = {s: "0" for s in self.streams}
+            num_processed = self.read(streams, 0)
+
+        # everything has been seen and processed where can mark this as applied
+        if not self.has_pending_message():
+            self.mark_as_applied()
         return num_processed

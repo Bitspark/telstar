@@ -1,3 +1,4 @@
+import os
 import uuid
 from datetime import datetime
 from unittest import mock
@@ -19,8 +20,20 @@ def link() -> redis.Redis:
 
 
 @pytest.fixture
-def consumer(link) -> Consumer:
-    return Consumer(link, "mygroup", "myname", "mytopic", lambda msg, done: done())
+def reallink() -> redis.Redis:
+    client = redis.from_url(os.environ.get("REDIS", "redis://localhost:6379/10"))
+    client.flushdb()
+    return client
+
+
+@pytest.fixture
+def realdb() -> peewee.Database:
+    db = connect(os.environ.get("DATABASE", "mysql://root:root@127.0.0.1:3306/test"))
+    tables = [StagedMessage]
+    db.bind(tables)
+    db.drop_tables(tables)
+    db.create_tables(tables)
+    return db
 
 
 @pytest.fixture
@@ -29,6 +42,11 @@ def db() -> peewee.Database:
     db.bind([StagedMessage])
     db.create_tables([StagedMessage])
     return db
+
+
+@pytest.fixture
+def consumer(link) -> Consumer:
+    return Consumer(link, "mygroup", "myname", "mytopic", lambda msg, done: done())
 
 
 def test_message():
@@ -191,7 +209,34 @@ def test_staged_producer_done_callback_removes_staged_events(db, link):
     assert len(msgs) == 1
     assert len(telstar.staged()) == 1
 
+
 def test_consumer_once_keys(link):
     callback = mock.Mock()
     m = MultiConsumeOnce(link, "testgroup", {"mystream": callback})
     assert m._applied_key() == "telstar:once:testgroup"
+
+
+@pytest.mark.integration
+def test_consumer_once(realdb, reallink):
+    result = list()
+    for i in range(10):
+        telstar.stage("mytopic", dict(i=i))
+
+    def callback(c, msg: Message, done):
+        data = int(msg.data["i"])
+        if data < c.stop:
+            result.append(data)
+            done()
+
+    sp = StagedProducer(reallink, realdb, batch_size=100)
+    sp.run_once()
+
+    m = MultiConsumeOnce(reallink, "mytest", {"mytopic": callback})
+    m.stop = 5
+    assert m.run() == 10  # Successfully proccessed 10 message but only five got ack'ed
+
+    m.stop = 10
+    assert m.run() == 5
+    assert m.run() == 0
+
+    assert result == list(range(10))
