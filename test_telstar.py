@@ -4,11 +4,12 @@ from unittest import mock
 
 import pytest
 import redis
+import peewee
 from playhouse.db_url import connect
 
 import telstar
 from telstar.com import Message, StagedMessage
-from telstar.consumer import Consumer, MultiConsumer
+from telstar.consumer import Consumer, MultiConsumer, MultiConsumeOnce
 from telstar.producer import StagedProducer
 
 
@@ -18,12 +19,12 @@ def link() -> redis.Redis:
 
 
 @pytest.fixture
-def consumer(link):
+def consumer(link) -> Consumer:
     return Consumer(link, "mygroup", "myname", "mytopic", lambda msg, done: done())
 
 
 @pytest.fixture
-def db():
+def db() -> peewee.Database:
     db = connect("sqlite:///:memory:")
     db.bind([StagedMessage])
     db.create_tables([StagedMessage])
@@ -189,3 +190,8 @@ def test_staged_producer_done_callback_removes_staged_events(db, link):
     msgs, _ = StagedProducer(link, db).get_records()
     assert len(msgs) == 1
     assert len(telstar.staged()) == 1
+
+def test_consumer_once_keys(link):
+    callback = mock.Mock()
+    m = MultiConsumeOnce(link, "testgroup", {"mystream": callback})
+    assert m._applied_key() == "telstar:once:testgroup"
