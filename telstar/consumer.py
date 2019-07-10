@@ -137,7 +137,7 @@ class MultiConsumer(object):
                 next_after_seen = self.increment(last_seen[stream_name])
                 last_seen[stream_name] = min([before_earliest, next_after_seen])
         # Read all message for the past up until now.
-        log.info(f"Stream: {", ".join(last_seen)} in Group: {self.group_name} as Consumer: {self.consumer_name} reading past messages")
+        log.info(f"Stream: {', '.join(last_seen)} in Group: {self.group_name} as Consumer: {self.consumer_name} reading past messages")
         self.catchup(last_seen)
 
     # This is the main loop where we start from the history
@@ -152,7 +152,7 @@ class MultiConsumer(object):
         self.transfer_and_process_stream_history(self.streams)
         # With our history processes we can now start waiting for new message to arrive `>`
         config = {k: ">" for k in self.streams}
-        log.info(f"Stream: {", ".join(self.streams)} in Group: {self.group_name} as Consumer: {self.consumer_name} reading pending message or waiting for new")
+        log.info(f"Stream: {', '.join(self.streams)} in Group: {self.group_name} as Consumer: {self.consumer_name} reading pending message or waiting for new")
         self.read(config, block=self.block)
 
     def get_last_seen_id(self, stream_name: str):
