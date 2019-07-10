@@ -1,5 +1,7 @@
 import json
 import logging
+import threading
+import time
 import uuid
 from functools import partial
 
@@ -94,6 +96,7 @@ class MultiConsumer(object):
         #  'consumers': [{'name': b'cg-userSignUp.1', 'pending': 10}]}
         # Nothing to do
         if pending_info["pending"] == 0:
+            log.debug(f"Found no pending messages in Stream: {stream_name} in Group: {self.group_name}")
             return
         # Get all messages ids within that range and select the ones we want to claim and claim them
         # But only if they are pending for more than 20secs.
@@ -134,7 +137,7 @@ class MultiConsumer(object):
                 next_after_seen = self.increment(last_seen[stream_name])
                 last_seen[stream_name] = min([before_earliest, next_after_seen])
         # Read all message for the past up until now.
-        log.info(f"Read messages from the past on Stream:{last_seen} as Consumer: {self.consumer_name} in Group: {self.group_name}")
+        log.info(f"Read messages from the past on Stream: {last_seen} as Consumer: {self.consumer_name} in Group: {self.group_name}")
         self.catchup(last_seen)
 
     # This is the main loop where we start from the history
@@ -149,7 +152,7 @@ class MultiConsumer(object):
         self.transfer_and_process_stream_history(self.streams)
         # With our history processes we can now start waiting for new message to arrive `>`
         config = {k: ">" for k in self.streams}
-        log.info(f"Awaiting new messages on Stream:{self.streams} as Consumer: {self.consumer_name} in Group: {self.group_name}")
+        log.info(f"Awaiting new messages on Stream: {self.streams} as Consumer: {self.consumer_name} in Group: {self.group_name}")
         self.read(config, block=self.block)
 
     def get_last_seen_id(self, stream_name: str):
@@ -221,3 +224,69 @@ class MultiConsumer(object):
 class Consumer(MultiConsumer):
     def __init__(self, link, group_name, consumer_name, stream_name, processor_fn):
         super().__init__(link, group_name, consumer_name, {stream_name: processor_fn})
+
+
+class MultiConsumeOnce(MultiConsumer):
+    # This lets you write code that is executed once against an entire stream
+    # TODO: What would be really cool is to have this sort of like migrations
+    #       where `telstar` itself has cli commands to add and run files containing
+    #       `MultiConsumeOnce` code.
+    def __init__(self, link: redis.Redis, group_name: str, config: dict):
+        super().__init__(link, group_name, "once-consumer", config, 2000, 20000)
+
+    def _applied_key(self):
+        return f"telstar:once:{self.group_name}"
+
+    def is_applied(self):
+        key = self._applied_key()
+        return bool(self.link.get(key))
+
+    def mark_as_applied(self):
+        key = self._applied_key()
+        return self.link.set(key, int(time.time()))
+
+    def has_pending_message(self):
+        for stream_name in self.streams:
+            if self.link.xpending(stream_name, self.group_name)["pending"] != 0:
+                return True
+        return False
+
+    def run(self):
+        num_processed = 0
+        if self.is_applied():
+            log.info(f"Not running Group: {self.group_name} for Streams: {self.streams} as it already ran")
+            return num_processed
+
+        # This is the first time we try to apply this.
+        if not self.has_pending_message():
+            # Reading a stream from ">" has a special meaning, it instructs redis to send all messages to the group
+            # Which does two things first it puts them all into the pending list of that consumer inside the group
+            # and also delivers them to the client.
+            streams = {s: ">" for s in self.streams}
+            num_processed = self.read(streams, 0)
+        else:
+            # Now the data as already been delivered to the group we can now start reading from the beginning
+            streams = {s: "0" for s in self.streams}
+            num_processed = self.read(streams, 0)
+
+        # everything has been seen and processed where can mark this as applied
+        if not self.has_pending_message():
+            self.mark_as_applied()
+        return num_processed
+
+
+class ThreadedMultiConsumer:
+    def __init__(self, link: redis.Redis, consumer_name: str, config: dict, **kw):
+        self.consumers = list()
+        for group_name, config in config.items():
+            self.consumers.append(MultiConsumer(link, group_name, consumer_name, config, **kw))
+
+    def run(self):
+        threads = list()
+        for c in self.consumers:
+            t = threading.Thread(target=c.run, daemon=True)
+            t.start()
+            threads.append(t)
+
+        for t in threads:
+            t.join()

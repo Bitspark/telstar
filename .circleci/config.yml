@@ -30,9 +30,12 @@ jobs:
       - run:
           command: |
             source venv/bin/activate
-            pytest --ignore=telstar/
+            pytest -m 'not integration' --ignore=telstar/
 
-  simulate-telstar:
+  integration-test:
+    parameters:
+      command:
+        type: string
     working_directory: ~/telstar
     docker:
       - image: circleci/python:3.6
@@ -64,36 +67,39 @@ jobs:
             popd
             source venv/bin/activate
             dockerize -wait tcp://localhost:3306 -timeout 1m
-            ./telstar/tests/test_telstar.sh
-
+            << parameters.command >>
 
   release:
     docker:
       - image: circleci/python:3.6
     working_directory: ~/telstar
     steps:
-    - checkout
-    - restore_cache:
-        key: v1-deps-{{ .Branch }}-{{ checksum "requirements.txt" }}
-    - run:
-        command: |
-          source venv/bin/activate
-          flit build
-          flit publish
-
-
+      - checkout
+      - restore_cache:
+          key: v1-deps-{{ .Branch }}-{{ checksum "requirements.txt" }}
+      - run:
+          command: |
+            source venv/bin/activate
+            flit build
+            flit publish
 
 workflows:
-  version: "2.1"
   build_and_test:
     jobs:
       - build
-
       - test:
           requires:
             - build
 
-      - simulate-telstar:
+      - integration-test:
+          name: integration-resiliency
+          command: ./telstar/tests/test_telstar.sh
+          requires:
+            - build
+
+      - integration-test:
+          name: integration-pytest
+          command: pytest -m 'integration' --ignore=telstar/
           requires:
             - build
 
@@ -104,4 +110,5 @@ workflows:
                 - master
           requires:
             - test
-            - simulate-telstar
+            - integration-pytest
+            - integration-resiliency
