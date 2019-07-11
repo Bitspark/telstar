@@ -17,6 +17,7 @@ class Producer(object):
     def run_once(self):
         records, done = self.get_records()
         for record in records:
+            sleep(.001)
             self.send(record)
         done()
 
@@ -45,7 +46,7 @@ class StagedProducer(Producer):
 
     def create_puller(self):
         def puller() -> Tuple[List[Message], Callable[[], None]]:
-            qs = StagedMessage.unsent().limit(self.batch_size)
+            qs = StagedMessage.unsent().limit(self.batch_size).order_by(StagedMessage.id)
             msgs = [e.to_msg() for e in qs]
             log.debug(f"Found {len(msgs)} messages to be send")
 

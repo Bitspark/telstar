@@ -209,15 +209,17 @@ class MultiConsumer(object):
         return self._xreadgroup(streams, block=block)
 
     def _xreadgroup(self, streams, block=0):
-        processed = 0
-        value = self.link.xreadgroup(self.group_name, self.consumer_name, streams, block=block)
-        if not value:
-            return 0
-        for stream_name, records in value:
+        result = list()
+        for stream_name, records in self.link.xreadgroup(self.group_name, self.consumer_name, streams, block=block):
             for record in records:
                 stream_msg_id, record = record
-                self.work(stream_name, stream_msg_id, record)
-                processed = processed + 1
+                result.append((stream_name, stream_msg_id, record))
+
+        if not result:
+            return 0
+
+        for processed, t in enumerate(sorted(result, key=lambda t: t[1]), start=1):
+            self.work(*t)
         return processed
 
 

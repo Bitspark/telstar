@@ -240,3 +240,36 @@ def test_consumer_once(realdb, reallink):
     assert m.run() == 0
 
     assert result == list(range(10))
+
+@pytest.mark.integration
+def test_consume_order(realdb, reallink):
+    result = list()
+    telstar.stage("mytopic", dict(i=1))
+    telstar.stage("mytopic2", dict(i=2))
+    telstar.stage("mytopic2", dict(i=3))
+    telstar.stage("mytopic", dict(i=4))
+    telstar.stage("mytopic2", dict(i=5))
+    telstar.stage("mytopic2", dict(i=6))
+    telstar.stage("mytopic2", dict(i=7))
+    telstar.stage("mytopic", dict(i=8))
+    telstar.stage("mytopic", dict(i=9))
+    telstar.stage("mytopic2", dict(i=10))
+    telstar.stage("mytopic2", dict(i=11))
+    telstar.stage("mytopic2", dict(i=12))
+
+    def callback(c, msg: Message, done):
+        data = int(msg.data["i"])
+        result.append(data)
+        done()
+
+    sp = StagedProducer(reallink, realdb, batch_size=100)
+    sp.run_once()
+    m = MultiConsumeOnce(reallink, "mytest", {"mytopic": callback, "mytopic2": callback})
+    m.run()
+
+    def monotonicity(l):
+        # Count the number of times the current element is one smaller than the next
+        return sum([x + 1 == y for x, y in zip(l, l[1:])])
+
+    # Maximum monotony
+    assert monotonicity(result) == 11
