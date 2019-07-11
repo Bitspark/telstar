@@ -217,7 +217,8 @@ class MultiConsumer(object):
 
         if not result:
             return 0
-
+        # Sort the message afterwards in order to restore the order they where sent in, this can only be a best effort
+        # approach and does not guarantee the correct order when using `xreadgroup` with multiple streams.
         for processed, t in enumerate(sorted(result, key=lambda t: t[1]), start=1):
             self.work(*t)
         return processed
