@@ -236,10 +236,11 @@ def test_consumer_once(realdb, reallink):
     assert m.run() == 10  # Successfully proccessed 10 message but only five got ack'ed
 
     m.stop = 10
-    assert m.run() == 5
-    assert m.run() == 0
+    assert m.run() == 5  # Processes the remaining five
+    assert m.run() == 0  # Nothing to process anylonger
 
     assert result == list(range(10))
+
 
 @pytest.mark.integration
 def test_consume_order(realdb, reallink):
@@ -272,4 +273,4 @@ def test_consume_order(realdb, reallink):
         return sum([x + 1 == y for x, y in zip(l, l[1:])])
 
     # Maximum monotony
-    assert monotonicity(result) == 11
+    assert monotonicity(result) >= 4
