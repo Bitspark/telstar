@@ -13,7 +13,8 @@ from marshmallow import Schema, ValidationError
 from .com import Message, StagedMessage
 from .consumer import MultiConsumer, ThreadedMultiConsumer
 
-log = logging.getLogger(__package__).addHandler(logging.NullHandler())
+logging.getLogger(__package__).addHandler(logging.NullHandler())
+log = logging.getLogger(__package__)
 
 
 def stage(topic, data):
