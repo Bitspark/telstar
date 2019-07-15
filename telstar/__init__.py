@@ -3,6 +3,7 @@ Telstar is a package to write producer and consumers groups against redis stream
 """
 __version__ = "0.2.0"
 
+import inspect
 import logging
 from functools import wraps
 
@@ -41,8 +42,14 @@ class app:
     def run_once(self):
         self.get_consumer().run_once()
 
+    def requires_full_message(self, fn):
+        argsspec = inspect.getfullargspec(fn)
+        arg = argsspec.args[0]
+        return argsspec.annotations[arg] is Message
+
     def consumer(self, group: str, streams: list, schema: Schema, strict=True, acknowledge_invalid=False):
         def decorator(fn):
+            fullmessage = self.requires_full_message(fn)
             nonlocal streams
             if not isinstance(streams, list):
                 streams = [streams]
@@ -50,8 +57,8 @@ class app:
                 @wraps(fn)
                 def actual_consumer(consumer: MultiConsumer, msg: Message, done: callable):
                     try:
-                        data = schema().load(msg.data)
-                        fn(data)
+                        msg.data = schema().load(msg.data)
+                        fn(msg) if fullmessage else fn(msg.data)
                         done()
                     except ValidationError as err:
                         if acknowledge_invalid:

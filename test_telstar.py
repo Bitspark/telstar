@@ -292,6 +292,24 @@ def test_app_consumer_do_not_ack_invalid(realdb, reallink, mocker, msg_schema):
 
 
 @pytest.mark.integration
+def test_app_consumer_full_message(realdb, reallink, mocker, msg_schema):
+    app = telstar.app(reallink, consumer_name="c1")
+    m = mock.Mock()
+
+    @app.consumer("group", "mytopic", schema=msg_schema, acknowledge_invalid=False, strict=False)
+    def callback(data: Message):
+        m(data)
+
+    telstar.stage("mytopic", dict(name="1", email="a@b.com"))
+    StagedProducer(reallink, realdb).run_once()
+
+    app.run_once()
+    [msg, ] = m.call_args[0]
+    assert msg.data == dict(name="1", email="a@b.com")
+    assert isinstance(msg, Message)
+
+
+@pytest.mark.integration
 def test_consumer_once(realdb, reallink):
     result = list()
     for i in range(10):
