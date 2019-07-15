@@ -146,9 +146,9 @@ class MultiConsumer(object):
     def run(self):
         log.info(f"Starting consumer loop for Group {self.group_name}")
         while True:
-            self._once()
+            self.run_once()
 
-    def _once(self):
+    def run_once(self):
         self.transfer_and_process_stream_history(self.streams)
         # With our history processes we can now start waiting for new message to arrive `>`
         config = {k: ">" for k in self.streams}
