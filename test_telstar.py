@@ -347,4 +347,4 @@ def test_consume_order(realdb, reallink):
         return sum([x + 1 == y for x, y in zip(l, l[1:])])
 
     # Maximum monotony
-    assert monotonicity(result) >= 4
+    assert monotonicity(result) >= 3
