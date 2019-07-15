@@ -61,6 +61,7 @@ class app:
                         fn(msg) if fullmessage else fn(msg.data)
                         done()
                     except ValidationError as err:
+                        log.error("Unable to validate message", exc_info=True)
                         if acknowledge_invalid:
                             done()
                         if strict:
