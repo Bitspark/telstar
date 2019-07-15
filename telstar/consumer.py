@@ -278,16 +278,37 @@ class MultiConsumeOnce(MultiConsumer):
         return num_processed
 
 
+class PropagatingThread(threading.Thread):
+    def run(self):
+        self.exc = None
+        try:
+            self.ret = self._target(*self._args, **self._kwargs)
+        except BaseException as e:
+            self.exc = e
+
+    def join(self):
+        super(PropagatingThread, self).join()
+        if self.exc:
+            raise self.exc
+        return self.ret
+
+
 class ThreadedMultiConsumer:
-    def __init__(self, link: redis.Redis, consumer_name: str, config: dict, **kw):
+    def __init__(self, link: redis.Redis, consumer_name: str, group_configs: dict, **kw):
         self.consumers = list()
-        for group_name, config in config.items():
+        for group_name, config in group_configs.items():
             self.consumers.append(MultiConsumer(link, group_name, consumer_name, config, **kw))
 
     def run(self):
+        self._run_threaded("run")
+
+    def run_once(self):
+        self._run_threaded("run_once")
+
+    def _run_threaded(self, target):
         threads = list()
         for c in self.consumers:
-            t = threading.Thread(target=c.run, daemon=True)
+            t = PropagatingThread(target=getattr(c, target), daemon=True)
             t.start()
             threads.append(t)
 
