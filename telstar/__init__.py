@@ -25,17 +25,21 @@ def staged():
 
 
 class app:
-    def __init__(self, link: redis.Redis, consumer_name: str, consumer_cls: MultiConsumer = ThreadedMultiConsumer):
+    def __init__(self, link: redis.Redis, consumer_name: str, consumer_cls: MultiConsumer = ThreadedMultiConsumer, **kwargs):
         self.link: redis = link
         self.config: dict = {}
         self.consumer_name: str = consumer_name
         self.consumer_cls: MultiConsumer = consumer_cls
+        self.kwargs = kwargs
+
+    def get_consumer(self):
+        return self.consumer_cls(self.link, self.consumer_name, self.config, **self.kwargs)
 
     def start(self):
-        self.consumer_cls(self.link, self.consumer_name, self.config).run()
+        self.get_consumer().run()
 
     def run_once(self):
-        self.consumer_cls(self.link, self.consumer_name, self.config).run_once()
+        self.get_consumer().run_once()
 
     def consumer(self, group: str, stream: str, schema: Schema, strict=True, acknowledge_invalid=False):
         def decorator(fn):
