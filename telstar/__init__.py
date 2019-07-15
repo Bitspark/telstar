@@ -37,7 +37,7 @@ class app:
     def run_once(self):
         self.consumer_cls(self.link, self.consumer_name, self.config).run_once()
 
-    def consumer(self, group: str, stream: str, schema: Schema, strict=False, acknowledge_invalid=True):
+    def consumer(self, group: str, stream: str, schema: Schema, strict=True, acknowledge_invalid=False):
         def decorator(fn):
             @wraps(fn)
             def actual_consumer(consumer: MultiConsumer, msg: Message, done: callable):
@@ -46,10 +46,10 @@ class app:
                     fn(data)
                     done()
                 except ValidationError as err:
-                    if strict:
-                        raise err
                     if acknowledge_invalid:
                         done()
+                    if strict:
+                        raise err
 
             if group in self.config:
                 self.config[group][stream] = actual_consumer

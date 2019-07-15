@@ -260,11 +260,11 @@ def test_app_consumer_strictness(realdb, reallink, msg_schema):
 def test_app_consumer_ack_invalid(realdb, reallink, mocker, msg_schema):
     app = telstar.app(reallink, consumer_name="c1")
 
-    @app.consumer("group", "mytopic", schema=msg_schema, acknowledge_invalid=True)
+    @app.consumer("group", "mytopic", schema=msg_schema, acknowledge_invalid=True, strict=False)
     def callback(data: dict):
         pass
 
-    telstar.stage("mytopic", dict(name="1", email="invalid"))
+    telstar.stage("mytopic", dict(name="1", email="a@b.com"))
     StagedProducer(reallink, realdb).run_once()
 
     ack = mocker.spy(MultiConsumer, "acknowledge")
@@ -277,7 +277,7 @@ def test_app_consumer_do_not_ack_invalid(realdb, reallink, mocker, msg_schema):
     app = telstar.app(reallink, consumer_name="c1")
     m = mock.Mock()
 
-    @app.consumer("group", "mytopic", schema=msg_schema, acknowledge_invalid=False)
+    @app.consumer("group", "mytopic", schema=msg_schema, acknowledge_invalid=False, strict=False)
     def callback(data: dict):
         m()
 
