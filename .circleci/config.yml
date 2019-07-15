@@ -66,6 +66,7 @@ jobs:
             popd
             source venv/bin/activate
             dockerize -wait tcp://localhost:3306 -timeout 1m
+            flit install 
             << parameters.command >>
 
   release:
