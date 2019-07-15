@@ -9,7 +9,8 @@ author-email = "kai.koenig@bitspark.de"
 home-page = "https://bitspark.de"
 requires = [
     "redis",
-    "peewee"
+    "peewee",
+    "marshmallow==3.0.0rc8"
 ]
 classifiers = ["License :: OSI Approved :: MIT License"]
 requires-python = ">=3.6"
