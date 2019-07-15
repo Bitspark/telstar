@@ -12,6 +12,15 @@ import telstar
 from telstar.com import Message, StagedMessage
 from telstar.consumer import Consumer, MultiConsumer, MultiConsumeOnce
 from telstar.producer import StagedProducer
+from marshmallow import fields, Schema, ValidationError
+
+
+@pytest.fixture
+def msg_schema() -> Schema:
+    class MyObjSchema(Schema):
+        name = fields.Str()
+        email = fields.Email()
+    return MyObjSchema
 
 
 @pytest.fixture
@@ -214,6 +223,71 @@ def test_consumer_once_keys(link):
     callback = mock.Mock()
     m = MultiConsumeOnce(link, "testgroup", {"mystream": callback})
     assert m._applied_key() == "telstar:once:testgroup"
+
+
+@pytest.mark.integration
+def test_app_pattern(realdb, reallink, msg_schema):
+    app = telstar.app(reallink, consumer_name="c1")
+    m = mock.Mock()
+
+    @app.consumer("group", "mytopic", schema=msg_schema)
+    def callback(data: dict):
+        m()
+
+    telstar.stage("mytopic", dict(name="1", email="a@b.com"))
+    StagedProducer(reallink, realdb).run_once()
+
+    app.run_once()
+    m.assert_called_once()
+
+
+@pytest.mark.integration
+def test_app_consumer_strictness(realdb, reallink, msg_schema):
+    app = telstar.app(reallink, consumer_name="c1")
+
+    @app.consumer("group", "mytopic", schema=msg_schema, strict=True)
+    def callback(data: dict):
+        print(data)
+
+    telstar.stage("mytopic", dict(name="1", email="invalid"))
+    StagedProducer(reallink, realdb).run_once()
+
+    with pytest.raises(ValidationError):
+        app.run_once()
+
+
+@pytest.mark.integration
+def test_app_consumer_ack_invalid(realdb, reallink, mocker, msg_schema):
+    app = telstar.app(reallink, consumer_name="c1")
+
+    @app.consumer("group", "mytopic", schema=msg_schema, acknowledge_invalid=True)
+    def callback(data: dict):
+        pass
+
+    telstar.stage("mytopic", dict(name="1", email="invalid"))
+    StagedProducer(reallink, realdb).run_once()
+
+    ack = mocker.spy(MultiConsumer, "acknowledge")
+    app.run_once()
+    ack.assert_called_once()
+
+
+@pytest.mark.integration
+def test_app_consumer_do_not_ack_invalid(realdb, reallink, mocker, msg_schema):
+    app = telstar.app(reallink, consumer_name="c1")
+    m = mock.Mock()
+
+    @app.consumer("group", "mytopic", schema=msg_schema, acknowledge_invalid=False)
+    def callback(data: dict):
+        m()
+
+    telstar.stage("mytopic", dict(name="1", email="invalid"))
+    StagedProducer(reallink, realdb).run_once()
+
+    ack = mocker.spy(MultiConsumer, "acknowledge")
+    app.run_once()
+    app.run_once()
+    ack.assert_not_called()
 
 
 @pytest.mark.integration
