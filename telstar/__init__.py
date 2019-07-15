@@ -41,23 +41,27 @@ class app:
     def run_once(self):
         self.get_consumer().run_once()
 
-    def consumer(self, group: str, stream: str, schema: Schema, strict=True, acknowledge_invalid=False):
+    def consumer(self, group: str, streams: list, schema: Schema, strict=True, acknowledge_invalid=False):
         def decorator(fn):
-            @wraps(fn)
-            def actual_consumer(consumer: MultiConsumer, msg: Message, done: callable):
-                try:
-                    data = schema().load(msg.data)
-                    fn(data)
-                    done()
-                except ValidationError as err:
-                    if acknowledge_invalid:
+            nonlocal streams
+            if not isinstance(streams, list):
+                streams = [streams]
+            for stream in streams:
+                @wraps(fn)
+                def actual_consumer(consumer: MultiConsumer, msg: Message, done: callable):
+                    try:
+                        data = schema().load(msg.data)
+                        fn(data)
                         done()
-                    if strict:
-                        raise err
+                    except ValidationError as err:
+                        if acknowledge_invalid:
+                            done()
+                        if strict:
+                            raise err
 
-            if group in self.config:
-                self.config[group][stream] = actual_consumer
-            else:
-                self.config[group] = {stream: actual_consumer}
+                if group in self.config:
+                    self.config[group][stream] = actual_consumer
+                else:
+                    self.config[group] = {stream: actual_consumer}
 
         return decorator

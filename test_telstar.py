@@ -230,15 +230,16 @@ def test_app_pattern(realdb, reallink, msg_schema):
     app = telstar.app(reallink, consumer_name="c1")
     m = mock.Mock()
 
-    @app.consumer("group", "mytopic", schema=msg_schema)
+    @app.consumer("group", ["mytopic", "mytopic2"], schema=msg_schema)
     def callback(data: dict):
         m()
 
     telstar.stage("mytopic", dict(name="1", email="a@b.com"))
+    telstar.stage("mytopic2", dict(name="1", email="a@b.com"))
     StagedProducer(reallink, realdb).run_once()
 
     app.run_once()
-    m.assert_called_once()
+    assert m.call_count == 2
 
 
 @pytest.mark.integration
