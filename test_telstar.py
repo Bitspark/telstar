@@ -12,6 +12,15 @@ import telstar
 from telstar.com import Message, StagedMessage
 from telstar.consumer import Consumer, MultiConsumer, MultiConsumeOnce
 from telstar.producer import StagedProducer
+from marshmallow import fields, Schema, ValidationError
+
+
+@pytest.fixture
+def msg_schema() -> Schema:
+    class MyObjSchema(Schema):
+        name = fields.Str()
+        email = fields.Email()
+    return MyObjSchema
 
 
 @pytest.fixture
@@ -69,7 +78,7 @@ def test_consumer_run(link: redis.Redis):
     ]]
     c = Consumer(link, "mygroup", "myname", "mytopic", callback)
     c.transfer_and_process_stream_history = lambda *a, **kw: None
-    c._once()
+    c.run_once()
     callback.assert_called()
 
 
@@ -91,7 +100,7 @@ def test_consumer_run_callback(link: redis.Redis):
     ]]
     c = Consumer(link, "mygroup", "myname", "mytopic", callback)
     c.transfer_and_process_stream_history = lambda *a, **kw: None
-    c._once()
+    c.run_once()
 
     assert called is True
 
@@ -109,7 +118,7 @@ def test_consumer_checkpoint(link: redis.Redis):
         b"telstar:stream:mytopic", [["stream_msg_id", {b'message_id': msg_id, b"data": "{}"}]]
     ]]
     c = Consumer(link, "mygroup", "myname", "mytopic", callback)
-    c._once()
+    c.run_once()
     link.get.assert_any_call("telstar:checkpoint:telstar:stream:mytopic:cg:mygroup:myname")
     pipeline.set.assert_called_with("telstar:checkpoint:telstar:stream:mytopic:cg:mygroup:myname", "stream_msg_id")
 
@@ -135,7 +144,7 @@ def test_consumer_with_multiple_stearms(link):
 
     mc = MultiConsumer(link, "group", "name", config)
     mc.transfer_and_process_stream_history = lambda *a, **kw: None
-    mc._once()
+    mc.run_once()
 
     assert callback1.call_count == 2
     assert callback2.call_count == 1
@@ -217,6 +226,90 @@ def test_consumer_once_keys(link):
 
 
 @pytest.mark.integration
+def test_app_pattern(realdb, reallink, msg_schema):
+    app = telstar.app(reallink, consumer_name="c1")
+    m = mock.Mock()
+
+    @app.consumer("group", ["mytopic", "mytopic2"], schema=msg_schema)
+    def callback(data: dict):
+        m()
+
+    telstar.stage("mytopic", dict(name="1", email="a@b.com"))
+    telstar.stage("mytopic2", dict(name="1", email="a@b.com"))
+    StagedProducer(reallink, realdb).run_once()
+
+    app.run_once()
+    assert m.call_count == 2
+
+
+@pytest.mark.integration
+def test_app_consumer_strictness(realdb, reallink, msg_schema):
+    app = telstar.app(reallink, consumer_name="c1")
+
+    @app.consumer("group", "mytopic", schema=msg_schema, strict=True)
+    def callback(data: dict):
+        print(data)
+
+    telstar.stage("mytopic", dict(name="1", email="invalid"))
+    StagedProducer(reallink, realdb).run_once()
+
+    with pytest.raises(ValidationError):
+        app.run_once()
+
+
+@pytest.mark.integration
+def test_app_consumer_ack_invalid(realdb, reallink, mocker, msg_schema):
+    app = telstar.app(reallink, consumer_name="c1")
+
+    @app.consumer("group", "mytopic", schema=msg_schema, acknowledge_invalid=True, strict=False)
+    def callback(data: dict):
+        pass
+
+    telstar.stage("mytopic", dict(name="1", email="a@b.com"))
+    StagedProducer(reallink, realdb).run_once()
+
+    ack = mocker.spy(MultiConsumer, "acknowledge")
+    app.run_once()
+    ack.assert_called_once()
+
+
+@pytest.mark.integration
+def test_app_consumer_do_not_ack_invalid(realdb, reallink, mocker, msg_schema):
+    app = telstar.app(reallink, consumer_name="c1")
+    m = mock.Mock()
+
+    @app.consumer("group", "mytopic", schema=msg_schema, acknowledge_invalid=False, strict=False)
+    def callback(data: dict):
+        m()
+
+    telstar.stage("mytopic", dict(name="1", email="invalid"))
+    StagedProducer(reallink, realdb).run_once()
+
+    ack = mocker.spy(MultiConsumer, "acknowledge")
+    app.run_once()
+    app.run_once()
+    ack.assert_not_called()
+
+
+@pytest.mark.integration
+def test_app_consumer_full_message(realdb, reallink, mocker, msg_schema):
+    app = telstar.app(reallink, consumer_name="c1")
+    m = mock.Mock()
+
+    @app.consumer("group", "mytopic", schema=msg_schema, acknowledge_invalid=False, strict=False)
+    def callback(data: Message):
+        m(data)
+
+    telstar.stage("mytopic", dict(name="1", email="a@b.com"))
+    StagedProducer(reallink, realdb).run_once()
+
+    app.run_once()
+    [msg, ] = m.call_args[0]
+    assert msg.data == dict(name="1", email="a@b.com")
+    assert isinstance(msg, Message)
+
+
+@pytest.mark.integration
 def test_consumer_once(realdb, reallink):
     result = list()
     for i in range(10):
@@ -236,10 +329,11 @@ def test_consumer_once(realdb, reallink):
     assert m.run() == 10  # Successfully proccessed 10 message but only five got ack'ed
 
     m.stop = 10
-    assert m.run() == 5
-    assert m.run() == 0
+    assert m.run() == 5  # Processes the remaining five
+    assert m.run() == 0  # Nothing to process anylonger
 
     assert result == list(range(10))
+
 
 @pytest.mark.integration
 def test_consume_order(realdb, reallink):
@@ -272,4 +366,4 @@ def test_consume_order(realdb, reallink):
         return sum([x + 1 == y for x, y in zip(l, l[1:])])
 
     # Maximum monotony
-    assert monotonicity(result) == 11
+    assert monotonicity(result) >= 3

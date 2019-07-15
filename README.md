@@ -114,10 +114,10 @@ REDIS=redis:// python consumer.py
 ```
 You should see output like the following
 ```bash
-{'stream': 'telstar:stream:mytopic', 'msg_uuid': b'64357230-8ff3-4eb9-8c06-757a42e961e2', 'data': {'key': 'value'}}
-{'stream': 'telstar:stream:mytopic', 'msg_uuid': b'a2443ae2-549e-49ab-9256-3f13575ba6ae', 'data': {'key': 'value'}}
-{'stream': 'telstar:stream:mytopic', 'msg_uuid': b'1c1d9f8c-e37b-43be-bab2-45caa10f233d', 'data': {'key': 'value'}}
-{'stream': 'telstar:stream:mytopic', 'msg_uuid': b'5da942ab-4aec-4a7f-bd93-a97168a8d3ad', 'data': {'key': 'value'}}
+{'stream': 'mytopic', 'msg_uuid': b'64357230-8ff3-4eb9-8c06-757a42e961e2', 'data': {'key': 'value'}}
+{'stream': 'mytopic', 'msg_uuid': b'a2443ae2-549e-49ab-9256-3f13575ba6ae', 'data': {'key': 'value'}}
+{'stream': 'mytopic', 'msg_uuid': b'1c1d9f8c-e37b-43be-bab2-45caa10f233d', 'data': {'key': 'value'}}
+{'stream': 'mytopic', 'msg_uuid': b'5da942ab-4aec-4a7f-bd93-a97168a8d3ad', 'data': {'key': 'value'}}
 ```
 Until the stream is exhausted.
 

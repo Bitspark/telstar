@@ -9,6 +9,7 @@ idna==2.8
 importlib-metadata==0.18
 isort==4.3.20
 lazy-object-proxy==1.4.1
+marshmallow==3.0.0rc8
 mccabe==0.6.1
 more-itertools==7.0.0
 packaging==19.0
@@ -19,6 +20,8 @@ pylint==2.3.1
 PyMySQL==0.9.3
 pyparsing==2.4.0
 pytest==4.6.3
+pytest-mock==1.10.4
+pytest-pudb==0.7.0
 pytoml==0.1.20
 redis==3.2.1
 requests==2.22.0

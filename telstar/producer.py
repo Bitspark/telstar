@@ -16,9 +16,16 @@ class Producer(object):
 
     def run_once(self):
         records, done = self.get_records()
-        for record in records:
+        pipe = self.link.pipeline()
+        for msg in records:
+            # Why the sleep here? It helps with sorting the events on the receiving side.
+            # But it also limits to amount of possible sends to under 1k messages per send.
+            # Which for now seems acceptable.
             sleep(.001)
-            self.send(record)
+            pipe.xadd(f"telstar:stream:{msg.stream}", {
+                      Message.IDFieldName: str(msg.msg_uuid),
+                      Message.DataFieldName: json.dumps(msg.data)})
+        pipe.execute()
         done()
 
     def run(self):
@@ -29,11 +36,6 @@ class Producer(object):
                     self.run_once()
             else:
                 self.run_once()
-
-    def send(self, msg: Message):
-        self.link.xadd(f"telstar:stream:{msg.stream}", {
-            Message.IDFieldName: str(msg.msg_uuid),
-            Message.DataFieldName: json.dumps(msg.data)})
 
 
 class StagedProducer(Producer):

@@ -55,7 +55,6 @@ jobs:
           key: v1-deps-{{ .Branch }}-{{ checksum "requirements.txt" }}
       - run:
           command: |
-            sudo apt-get install mysql-client
             pushd `pwd`
             cd /tmp
             wget http://download.redis.io/redis-stable.tar.gz
