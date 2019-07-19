@@ -336,6 +336,11 @@ def test_consumer_once(realdb, reallink):
 
 
 @pytest.mark.integration
+def test_admin(reallink):
+    admin = telstar.admin(reallink)
+
+
+@pytest.mark.integration
 def test_consume_order(realdb, reallink):
     result = list()
     telstar.stage("mytopic", dict(i=1))
