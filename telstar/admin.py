@@ -9,15 +9,6 @@ class AdminMessage:
         self.time_since_delivered = time_since_delivered
         self.times_delivered = times_delivered
 
-    def mark_as_seen(self):
-        pass
-
-    def ack(self):
-        pass
-
-    def remove(self):
-        pass
-
 
 class Consumer:
     def __init__(self, name: bytes, pending: int, idle: int):
@@ -55,9 +46,6 @@ class Group:
     def get_consumers(self):
         return [Consumer(**info) for info in self.link.xinfo_consumers(self.stream_name, self.name)]
 
-    def remove(self):
-        pass
-
 
 class admin:
     def __init__(self, link: redis.Redis):
@@ -70,15 +58,3 @@ class admin:
 
     def get_consumers(self):
         return sum([g.get_consumers() for s in self.get_streams() for g in s.get_groups()], [])
-
-    def get_groups(self):
-        pass
-
-    def get_dead_groups(self):
-        pass
-
-    def get_dead_consumers(self):
-        pass
-
-    def get_broken_messages(self):
-        pass

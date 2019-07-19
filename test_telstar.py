@@ -336,8 +336,34 @@ def test_consumer_once(realdb, reallink):
 
 
 @pytest.mark.integration
-def test_admin(reallink):
+def test_admin(reallink, realdb, msg_schema):
+    app = telstar.app(reallink, consumer_name="c1")
     admin = telstar.admin(reallink)
+    telstar.stage("mytopic", dict(name="1", email="a@b.com"))
+
+    sp = StagedProducer(reallink, realdb, batch_size=100)
+    sp.run_once()
+
+    [stream] = admin.get_streams()
+    # We have not yet read something from the stream thus there is now group and no consumer
+    assert stream.get_pending_messages() == []
+    assert stream.get_groups() == []
+
+    @app.consumer("group", "mytopic", schema=msg_schema, acknowledge_invalid=False, strict=False)
+    def callback(data: Message):
+        raise Exception("Wont't process")
+
+    with pytest.raises(Exception):
+        app.run_once()
+    with pytest.raises(Exception):
+        app.run_once()
+
+    [msg] = stream.get_pending_messages()
+    [grp] = stream.get_groups()
+    [consumer] = grp.get_consumers()
+
+    assert msg.times_delivered == 2
+    assert consumer.idle_time < 1000
 
 
 @pytest.mark.integration
