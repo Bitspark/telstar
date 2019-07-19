@@ -1,7 +1,7 @@
 """
 Telstar is a package to write producer and consumers groups against redis streams.
 """
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 import inspect
 import logging
@@ -12,9 +12,12 @@ from marshmallow import Schema, ValidationError
 
 from .com import Message, StagedMessage
 from .consumer import MultiConsumer, ThreadedMultiConsumer
+from .admin import admin
 
 logging.getLogger(__package__).addHandler(logging.NullHandler())
 log = logging.getLogger(__package__)
+
+admin = admin
 
 
 def stage(topic, data):
@@ -62,7 +65,7 @@ class app:
                         fn(msg) if fullmessage else fn(msg.data)
                         done()
                     except ValidationError as err:
-                        log.error("Unable to validate message", exc_info=True)
+                        log.error(f"Unable to validate message: {msg}", exc_info=True)
                         if acknowledge_invalid:
                             done()
                         if strict:
