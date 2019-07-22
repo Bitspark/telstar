@@ -37,7 +37,7 @@ def reallink() -> redis.Redis:
 
 @pytest.fixture
 def realdb() -> peewee.Database:
-    db = connect(os.environ.get("DATABASE", "mysql://root:root@127.0.0.1:3306/test"))
+    db = connect(os.environ.get("DATABASE", "postgres://127.0.0.1:5432/telstar-integration-test"))
     tables = [StagedMessage]
     db.bind(tables)
     db.drop_tables(tables)
@@ -336,7 +336,7 @@ def test_consumer_once(realdb, reallink):
 
 
 @pytest.mark.integration
-def test_admin(reallink, realdb, msg_schema):
+def test_admin_basics(reallink, realdb, msg_schema):
     app = telstar.app(reallink, consumer_name="c1")
     admin = telstar.admin(reallink)
     telstar.stage("mytopic", dict(name="1", email="a@b.com"))
@@ -362,8 +362,82 @@ def test_admin(reallink, realdb, msg_schema):
     [grp] = stream.get_groups()
     [consumer] = grp.get_consumers()
 
+    assert stream.get_length() == 1
+    assert grp.get_seen_messages() == 0
+    assert stream.display_name == b"mytopic"
+
     assert msg.times_delivered == 2
     assert consumer.idle_time < 1000
+
+
+@pytest.mark.integration
+def test_admin_group_deletion(reallink, realdb, msg_schema):
+    app = telstar.app(reallink, consumer_name="c1")
+    admin = telstar.admin(reallink)
+    telstar.stage("mytopic", dict(name="1", email="a@b.com"))
+
+    sp = StagedProducer(reallink, realdb, batch_size=100)
+    sp.run_once()
+
+    @app.consumer("group", "mytopic", schema=msg_schema)
+    def callback(data: Message):
+        pass
+
+    app.run_once()
+
+    [stream] = admin.get_streams()
+    [grp] = stream.get_groups()
+
+    grp.delete()
+
+    assert stream.get_groups() == []
+
+
+@pytest.mark.integration
+def test_admin_read_pending_message(reallink, realdb, msg_schema):
+    app = telstar.app(reallink, consumer_name="c1")
+    admin = telstar.admin(reallink)
+    data = dict(name="1", email="a@b.com")
+    telstar.stage("mytopic", data)
+
+    sp = StagedProducer(reallink, realdb, batch_size=100)
+    sp.run_once()
+
+    @app.consumer("group", "mytopic", schema=msg_schema, acknowledge_invalid=False, strict=False)
+    def callback(data: Message):
+        raise Exception("Wont't process")
+
+    with pytest.raises(Exception):
+        app.run_once()
+
+    [stream] = admin.get_streams()
+    [grp] = stream.get_groups()
+    [msg] = grp.get_pending_messages()
+    assert msg.read().data == data
+
+
+@pytest.mark.integration
+def test_admin_consumer_deletion(reallink, realdb, msg_schema):
+    app = telstar.app(reallink, consumer_name="c1")
+    admin = telstar.admin(reallink)
+    telstar.stage("mytopic", dict(name="1", email="a@b.com"))
+
+    sp = StagedProducer(reallink, realdb, batch_size=100)
+    sp.run_once()
+
+    @app.consumer("group", "mytopic", schema=msg_schema)
+    def callback(data: Message):
+        pass
+
+    app.run_once()
+
+    [stream] = admin.get_streams()
+    [grp] = stream.get_groups()
+    [consumer] = grp.get_consumers()
+
+    consumer.delete()
+
+    assert grp.get_consumers() == []
 
 
 @pytest.mark.integration
