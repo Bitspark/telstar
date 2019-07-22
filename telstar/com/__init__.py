@@ -1,8 +1,10 @@
 import json
 import uuid
+from datetime import datetime
+from typing import Dict, Union
 
 import peewee
-from datetime import datetime
+from peewee import ModelSelect
 
 
 class TelstarEncoder(json.JSONEncoder):
@@ -17,35 +19,19 @@ class TelstarEncoder(json.JSONEncoder):
 
 
 class JSONField(peewee.TextField):
-    def db_value(self, value):
+    def db_value(self, value: Dict[str, Union[int, str]]) -> str:
         return json.dumps(value, cls=TelstarEncoder)
 
-    def python_value(self, value):
+    def python_value(self, value: str) -> Dict[str, Union[int, str]]:
         if value is not None:
             return json.loads(value)
-
-
-class StagedMessage(peewee.Model):
-    msg_uid = peewee.UUIDField(default=uuid.uuid4, index=True)
-    topic = peewee.CharField(index=True)
-    data = JSONField()
-
-    sent = peewee.BooleanField(default=False, index=True)
-    created_at = peewee.TimestampField(resolution=10**3)
-
-    @classmethod
-    def unsent(cls):
-        return cls.select().where(cls.sent == False)  # noqa
-
-    def to_msg(self):
-        return Message(self.topic, self.msg_uid, self.data)
 
 
 class Message(object):
     IDFieldName = b"message_id"
     DataFieldName = b"data"
 
-    def __init__(self, stream: str, msg_uuid: uuid.UUID, data: dict):
+    def __init__(self, stream: str, msg_uuid: uuid.UUID, data: dict) -> None:
         if not isinstance(msg_uuid, uuid.UUID):
             raise TypeError(f"msg_uuid needs to be uuid.UUID not {type(msg_uuid)}")
         if isinstance(stream, bytes):
@@ -58,7 +44,23 @@ class Message(object):
         return f"<Message self.stream:{self.stream} msd_id:{self.msg_uuid} data:{self.data}>"
 
 
-def increment_msg_id(id):
+class StagedMessage(peewee.Model):
+    msg_uid = peewee.UUIDField(default=uuid.uuid4, index=True)
+    topic = peewee.CharField(index=True)
+    data = JSONField()
+
+    sent = peewee.BooleanField(default=False, index=True)
+    created_at = peewee.TimestampField(resolution=10**3)
+
+    @classmethod
+    def unsent(cls) -> ModelSelect:
+        return cls.select().where(cls.sent == False)  # noqa
+
+    def to_msg(self) -> Message:
+        return Message(self.topic, self.msg_uid, self.data)
+
+
+def increment_msg_id(id) -> bytes:
     # IDs are of the form "1509473251518-0" and comprise a millisecond
     # timestamp plus a sequence number to differentiate within the timestamp.
     time, sequence = id.decode("ascii").split("-")
@@ -69,7 +71,7 @@ def increment_msg_id(id):
     return bytes(f"{time}-{next_sequence}", "ascii")
 
 
-def decrement_msg_id(id):
+def decrement_msg_id(id: bytes) -> bytes:
     time, sequence = id.decode("ascii").split("-")
     if not sequence:
         raise Exception("Argument error, {id} has wrong format not #-#")
