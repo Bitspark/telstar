@@ -1,10 +1,9 @@
 import json
 import logging
 from time import sleep
-from typing import Callable, List, Optional, Tuple, Union
-from unittest.mock import MagicMock
+from typing import Callable, List, Optional, Tuple
 
-from peewee import PostgresqlDatabase, SqliteDatabase
+from peewee import Database
 from redis.client import Redis
 
 from .com import Message, StagedMessage
@@ -13,7 +12,7 @@ log = logging.getLogger(__name__)
 
 
 class Producer(object):
-    def __init__(self, link: Union[Redis, MagicMock], get_records: Callable[[], Tuple[List[Message], Callable[[], None]]], context_callable: Optional[Callable] = None) -> None:
+    def __init__(self, link: Redis, get_records: Callable[[], Tuple[List[Message], Callable[[], None]]], context_callable: Optional[Callable] = None) -> None:
         self.link = link
         self.get_records = get_records
         self.context_callable = context_callable
@@ -43,7 +42,7 @@ class Producer(object):
 
 
 class StagedProducer(Producer):
-    def __init__(self, link: Union[Redis, MagicMock], database: Union[SqliteDatabase, PostgresqlDatabase], batch_size: int = 5, wait: float = 0.5) -> None:
+    def __init__(self, link: Redis, database: Database, batch_size: int = 5, wait: float = 0.5) -> None:
         self.batch_size = batch_size
         self.wait = wait
         StagedMessage.bind(database)

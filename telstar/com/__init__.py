@@ -60,7 +60,7 @@ class StagedMessage(peewee.Model):
         return Message(self.topic, self.msg_uid, self.data)
 
 
-def increment_msg_id(id):
+def increment_msg_id(id) -> bytes:
     # IDs are of the form "1509473251518-0" and comprise a millisecond
     # timestamp plus a sequence number to differentiate within the timestamp.
     time, sequence = id.decode("ascii").split("-")

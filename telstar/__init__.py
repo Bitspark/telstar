@@ -6,7 +6,6 @@ import logging
 from datetime import datetime
 from functools import wraps
 from typing import Callable, Dict, List, Union
-from unittest.mock import MagicMock
 from uuid import UUID
 
 import redis
@@ -25,7 +24,7 @@ log = logging.getLogger(__package__)
 admin = admin
 
 
-def stage(topic: str, data: Dict[str, Union[int, str, datetime, UUID, MagicMock]]) -> UUID:
+def stage(topic: str, data: Dict[str, Union[int, str, datetime, UUID]]) -> UUID:
     e = StagedMessage.create(topic=topic, data=data)
     return e.msg_uid
 

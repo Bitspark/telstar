@@ -5,7 +5,6 @@ import time
 import uuid
 from functools import partial
 from typing import Callable, Dict
-from unittest.mock import MagicMock
 
 import redis
 
@@ -202,7 +201,7 @@ class MultiConsumer(object):
 
 
 class Consumer(MultiConsumer):
-    def __init__(self, link: MagicMock, group_name: str, consumer_name: str, stream_name: str, processor_fn: Callable) -> None:
+    def __init__(self, link: redis.Redis, group_name: str, consumer_name: str, stream_name: str, processor_fn: Callable) -> None:
         super().__init__(link, group_name, consumer_name, {stream_name: processor_fn})
 
 
