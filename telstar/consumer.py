@@ -7,7 +7,7 @@ from functools import partial
 
 import redis
 
-from .com import Message
+from .com import Message, increment_msg_id, decrement_msg_id
 
 # An important concept to understand here is the consumer group which give us the following consumer properties:
 # msg   -> consumer
@@ -28,31 +28,6 @@ log = logging.getLogger(__name__)
 
 
 class MultiConsumer(object):
-
-    @staticmethod
-    def increment(id):
-        # IDs are of the form "1509473251518-0" and comprise a millisecond
-        # timestamp plus a sequence number to differentiate within the timestamp.
-        time, sequence = id.decode("ascii").split("-")
-        if not sequence:
-            raise Exception("Argument error, {id} has wrong format not #-#")
-        next_sequence = int(sequence) + 1
-
-        return bytes(f"{time}-{next_sequence}", "ascii")
-
-    @staticmethod
-    def decrement(id):
-        time, sequence = id.decode("ascii").split("-")
-        if not sequence:
-            raise Exception("Argument error, {id} has wrong format not #-#")
-        sequence = int(sequence)
-        time = int(time)
-        if sequence == 0:
-            time = time - 1
-        else:
-            sequence = int(sequence) - 1
-
-        return bytes(f"{time}-{sequence}", "ascii")
 
     def __init__(self, link: redis.Redis, group_name: str, consumer_name: str, config: dict, block=2000, claim_the_dead_after=20 * 1000):
         self.link = link
@@ -133,8 +108,8 @@ class MultiConsumer(object):
             if stream_msg_ids:
                 # if there are message that we have claimed we need to determine where to start processing
                 # because we can't just wait for new message to arrive.
-                before_earliest = self.decrement(min(stream_msg_ids))
-                next_after_seen = self.increment(last_seen[stream_name])
+                before_earliest = decrement_msg_id(min(stream_msg_ids))
+                next_after_seen = increment_msg_id(last_seen[stream_name])
                 last_seen[stream_name] = min([before_earliest, next_after_seen])
         # Read all message for the past up until now.
         log.info(f"Stream: {', '.join(last_seen)} in Group: {self.group_name} as Consumer: {self.consumer_name} reading past messages")

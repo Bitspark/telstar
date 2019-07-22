@@ -56,3 +56,28 @@ class Message(object):
 
     def __repr__(self):
         return f"<Message self.stream:{self.stream} msd_id:{self.msg_uuid} data:{self.data}>"
+
+
+def increment_msg_id(id):
+    # IDs are of the form "1509473251518-0" and comprise a millisecond
+    # timestamp plus a sequence number to differentiate within the timestamp.
+    time, sequence = id.decode("ascii").split("-")
+    if not sequence:
+        raise Exception("Argument error, {id} has wrong format not #-#")
+    next_sequence = int(sequence) + 1
+
+    return bytes(f"{time}-{next_sequence}", "ascii")
+
+
+def decrement_msg_id(id):
+    time, sequence = id.decode("ascii").split("-")
+    if not sequence:
+        raise Exception("Argument error, {id} has wrong format not #-#")
+    sequence = int(sequence)
+    time = int(time)
+    if sequence == 0:
+        time = time - 1
+    else:
+        sequence = int(sequence) - 1
+
+    return bytes(f"{time}-{sequence}", "ascii")
