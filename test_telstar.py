@@ -37,7 +37,7 @@ def reallink() -> redis.Redis:
 
 @pytest.fixture
 def realdb() -> peewee.Database:
-    db = connect(os.environ.get("DATABASE", "mysql://root:root@127.0.0.1:3306/test"))
+    db = connect(os.environ.get("DATABASE", "postgres://127.0.0.1:5432/telstar-integration-test"))
     tables = [StagedMessage]
     db.bind(tables)
     db.drop_tables(tables)
