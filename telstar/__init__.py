@@ -1,18 +1,23 @@
 """
 Telstar is a package to write producer and consumers groups against redis streams.
 """
-__version__ = "0.2.2"
-
 import inspect
 import logging
+from datetime import datetime
 from functools import wraps
+from typing import Callable, Dict, List, Union
+from unittest.mock import MagicMock
+from uuid import UUID
 
 import redis
 from marshmallow import Schema, ValidationError
 
+from .admin import admin
 from .com import Message, StagedMessage
 from .consumer import MultiConsumer, ThreadedMultiConsumer
-from .admin import admin
+
+__version__ = "0.2.3"
+
 
 logging.getLogger(__package__).addHandler(logging.NullHandler())
 log = logging.getLogger(__package__)
@@ -20,38 +25,38 @@ log = logging.getLogger(__package__)
 admin = admin
 
 
-def stage(topic, data):
+def stage(topic: str, data: Dict[str, Union[int, str, datetime, UUID, MagicMock]]) -> UUID:
     e = StagedMessage.create(topic=topic, data=data)
     return e.msg_uid
 
 
-def staged():
+def staged() -> List[Message]:
     return [e.to_msg() for e in StagedMessage.unsent()]
 
 
 class app:
-    def __init__(self, link: redis.Redis, consumer_name: str, consumer_cls: MultiConsumer = ThreadedMultiConsumer, **kwargs):
+    def __init__(self, link: redis.Redis, consumer_name: str, consumer_cls: MultiConsumer = ThreadedMultiConsumer, **kwargs) -> None:
         self.link: redis = link
         self.config: dict = {}
         self.consumer_name: str = consumer_name
         self.consumer_cls: MultiConsumer = consumer_cls
         self.kwargs = kwargs
 
-    def get_consumer(self):
+    def get_consumer(self) -> MultiConsumer:
         return self.consumer_cls(self.link, self.consumer_name, self.config, **self.kwargs)
 
     def start(self):
         self.get_consumer().run()
 
-    def run_once(self):
+    def run_once(self) -> None:
         self.get_consumer().run_once()
 
-    def requires_full_message(self, fn):
+    def requires_full_message(self, fn: Callable) -> bool:
         argsspec = inspect.getfullargspec(fn)
         arg = argsspec.args[0]
         return argsspec.annotations[arg] is Message
 
-    def consumer(self, group: str, streams: list, schema: Schema, strict=True, acknowledge_invalid=False):
+    def consumer(self, group: str, streams: list, schema: Schema, strict=True, acknowledge_invalid=False) -> Callable:
         def decorator(fn):
             fullmessage = self.requires_full_message(fn)
             nonlocal streams

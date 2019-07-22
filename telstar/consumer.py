@@ -4,10 +4,12 @@ import threading
 import time
 import uuid
 from functools import partial
+from typing import Callable, Dict
+from unittest.mock import MagicMock
 
 import redis
 
-from .com import Message, increment_msg_id, decrement_msg_id
+from .com import Message, decrement_msg_id, increment_msg_id
 
 # An important concept to understand here is the consumer group which give us the following consumer properties:
 # msg   -> consumer
@@ -29,7 +31,7 @@ log = logging.getLogger(__name__)
 
 class MultiConsumer(object):
 
-    def __init__(self, link: redis.Redis, group_name: str, consumer_name: str, config: dict, block=2000, claim_the_dead_after=20 * 1000):
+    def __init__(self, link: redis.Redis, group_name: str, consumer_name: str, config: dict, block: int = 2000, claim_the_dead_after: int = 20 * 1000) -> None:
         self.link = link
         self.block = block
         self.claim_the_dead_after = claim_the_dead_after
@@ -43,18 +45,18 @@ class MultiConsumer(object):
         for stream_name in self.streams:
             self.create_consumer_group(stream_name)
 
-    def get_consumer_name(self, stream):
+    def get_consumer_name(self, stream: str) -> str:
         return f"cg:{self.group_name}:{self.consumer_name}"
 
-    def _seen_key(self, msg: Message):
+    def _seen_key(self, msg: Message) -> str:
         return f"telstar:seen:{msg.stream}:{self.group_name}:{msg.msg_uuid}"
 
-    def _checkpoint_key(self, stream: str):
+    def _checkpoint_key(self, stream: str) -> str:
         return f"telstar:checkpoint:{stream}:{self.get_consumer_name(stream)}"
 
     # A new consumer group for the given stream, if the stream does not exist yet
     # create one (`mkstream`) - if it does we want all messages present `id=0`
-    def create_consumer_group(self, stream_name: str):
+    def create_consumer_group(self, stream_name: str) -> None:
         try:
             self.link.xgroup_create(stream_name, self.group_name, mkstream=True, id="0")
         except redis.exceptions.ResponseError:
@@ -62,7 +64,7 @@ class MultiConsumer(object):
 
     # In consumer groups, consumers can disappear, when they do they can leave non ack'ed message
     # which we want to claim and be delivered to a new consumer
-    def claim_message_from_the_dead(self, stream_name: str):
+    def claim_message_from_the_dead(self, stream_name: str) -> None:
         # Get information about all consumers in the group and how many messages are pending
         pending_info = self.link.xpending(stream_name, self.group_name)
         # {'pending': 10,
@@ -123,14 +125,14 @@ class MultiConsumer(object):
         while True:
             self.run_once()
 
-    def run_once(self):
+    def run_once(self) -> None:
         self.transfer_and_process_stream_history(self.streams)
         # With our history processes we can now start waiting for new message to arrive `>`
         config = {k: ">" for k in self.streams}
         log.info(f"Stream: {', '.join(self.streams)} in Group: {self.group_name} as Consumer: {self.consumer_name} reading pending message or waiting for new")
         self.read(config, block=self.block)
 
-    def get_last_seen_id(self, stream_name: str):
+    def get_last_seen_id(self, stream_name: str) -> bytes:
         check_point_key = self._checkpoint_key(stream_name)
         return self.link.get(check_point_key) or b"0-0"
 
@@ -140,7 +142,7 @@ class MultiConsumer(object):
     # 2. Each message has a UUID and in order to process each meassage only once we remember
     #    the UUID for 14 days
     # 3. Acknowledge the message to meaning that we have processed it
-    def acknowledge(self, msg: Message, stream_msg_id):
+    def acknowledge(self, msg: Message, stream_msg_id: bytes) -> None:
         log.debug(f"Stream: telstar:stream:{msg.stream} in Group: {self.group_name} acknowledging Message: {msg.msg_uuid} - {stream_msg_id}")
         check_point_key = self._checkpoint_key(f"telstar:stream:{msg.stream}")
         seen_key = self._seen_key(msg)
@@ -161,7 +163,7 @@ class MultiConsumer(object):
         pipe.xack(f"telstar:stream:{msg.stream}", self.group_name, stream_msg_id)
         pipe.execute()
 
-    def work(self, stream_name, stream_msg_id, record):
+    def work(self, stream_name: bytes, stream_msg_id: bytes, record: Dict[bytes, bytes]) -> None:
         msg = Message(stream_name,
                       uuid.UUID(record[Message.IDFieldName].decode("ascii")),
                       json.loads(record[Message.DataFieldName]))
@@ -176,14 +178,14 @@ class MultiConsumer(object):
         self.processors[stream_name.decode("ascii")](self, msg, done)
 
     # Process all message from `start`
-    def catchup(self, streams):
+    def catchup(self, streams: Dict[str, bytes]) -> int:
         return self._xreadgroup(streams)
 
     # Process wait for new messages
-    def read(self, streams, block):
+    def read(self, streams: Dict[str, str], block: int) -> int:
         return self._xreadgroup(streams, block=block)
 
-    def _xreadgroup(self, streams, block=0):
+    def _xreadgroup(self, streams: Dict[str, str], block: int = 0) -> int:
         result = list()
         for stream_name, records in self.link.xreadgroup(self.group_name, self.consumer_name, streams, block=block):
             for record in records:
@@ -200,7 +202,7 @@ class MultiConsumer(object):
 
 
 class Consumer(MultiConsumer):
-    def __init__(self, link, group_name, consumer_name, stream_name, processor_fn):
+    def __init__(self, link: MagicMock, group_name: str, consumer_name: str, stream_name: str, processor_fn: Callable) -> None:
         super().__init__(link, group_name, consumer_name, {stream_name: processor_fn})
 
 
@@ -209,27 +211,27 @@ class MultiConsumeOnce(MultiConsumer):
     # TODO: What would be really cool is to have this sort of like migrations
     #       where `telstar` itself has cli commands to add and run files containing
     #       `MultiConsumeOnce` code.
-    def __init__(self, link: redis.Redis, group_name: str, config: dict):
+    def __init__(self, link: redis.Redis, group_name: str, config: dict) -> None:
         super().__init__(link, group_name, "once-consumer", config, 2000, 20000)
 
-    def _applied_key(self):
+    def _applied_key(self) -> str:
         return f"telstar:once:{self.group_name}"
 
-    def is_applied(self):
+    def is_applied(self) -> bool:
         key = self._applied_key()
         return bool(self.link.get(key))
 
-    def mark_as_applied(self):
+    def mark_as_applied(self) -> bool:
         key = self._applied_key()
         return self.link.set(key, int(time.time()))
 
-    def has_pending_message(self):
+    def has_pending_message(self) -> bool:
         for stream_name in self.streams:
             if self.link.xpending(stream_name, self.group_name)["pending"] != 0:
                 return True
         return False
 
-    def run(self):
+    def run(self) -> int:
         num_processed = 0
         if self.is_applied():
             log.info(f"Group: {self.group_name} for Streams: {self.streams} will not run as it already ran")
@@ -261,7 +263,7 @@ class PropagatingThread(threading.Thread):
         except BaseException as e:
             self.exc = e
 
-    def join(self):
+    def join(self) -> None:
         super(PropagatingThread, self).join()
         if self.exc:
             raise self.exc
@@ -269,7 +271,7 @@ class PropagatingThread(threading.Thread):
 
 
 class ThreadedMultiConsumer:
-    def __init__(self, link: redis.Redis, consumer_name: str, group_configs: dict, **kw):
+    def __init__(self, link: redis.Redis, consumer_name: str, group_configs: dict, **kw) -> None:
         self.consumers = list()
         for group_name, config in group_configs.items():
             self.consumers.append(MultiConsumer(link, group_name, consumer_name, config, **kw))
@@ -277,10 +279,10 @@ class ThreadedMultiConsumer:
     def run(self):
         self._run_threaded("run")
 
-    def run_once(self):
+    def run_once(self) -> None:
         self._run_threaded("run_once")
 
-    def _run_threaded(self, target):
+    def _run_threaded(self, target: str) -> None:
         threads = list()
         for c in self.consumers:
             t = PropagatingThread(target=getattr(c, target), daemon=True)

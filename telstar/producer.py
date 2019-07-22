@@ -1,7 +1,11 @@
 import json
 import logging
 from time import sleep
-from typing import Callable, List, Tuple
+from typing import Callable, List, Optional, Tuple, Union
+from unittest.mock import MagicMock
+
+from peewee import PostgresqlDatabase, SqliteDatabase
+from redis.client import Redis
 
 from .com import Message, StagedMessage
 
@@ -9,12 +13,12 @@ log = logging.getLogger(__name__)
 
 
 class Producer(object):
-    def __init__(self, link, get_records: Callable[[], Tuple[List[Message], Callable[[], None]]], context_callable=None):
+    def __init__(self, link: Union[Redis, MagicMock], get_records: Callable[[], Tuple[List[Message], Callable[[], None]]], context_callable: Optional[Callable] = None) -> None:
         self.link = link
         self.get_records = get_records
         self.context_callable = context_callable
 
-    def run_once(self):
+    def run_once(self) -> None:
         records, done = self.get_records()
         pipe = self.link.pipeline()
         for msg in records:
@@ -39,14 +43,14 @@ class Producer(object):
 
 
 class StagedProducer(Producer):
-    def __init__(self, link, database, batch_size=5, wait=0.5):
+    def __init__(self, link: Union[Redis, MagicMock], database: Union[SqliteDatabase, PostgresqlDatabase], batch_size: int = 5, wait: float = 0.5) -> None:
         self.batch_size = batch_size
         self.wait = wait
         StagedMessage.bind(database)
 
         super().__init__(link, self.create_puller(), StagedMessage._meta.database.atomic)
 
-    def create_puller(self):
+    def create_puller(self) -> Callable:
         def puller() -> Tuple[List[Message], Callable[[], None]]:
             qs = StagedMessage.unsent().limit(self.batch_size).order_by(StagedMessage.id)
             msgs = [e.to_msg() for e in qs]
