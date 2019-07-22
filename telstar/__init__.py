@@ -1,7 +1,7 @@
 """
 Telstar is a package to write producer and consumers groups against redis streams.
 """
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 import inspect
 import logging
