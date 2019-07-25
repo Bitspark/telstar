@@ -15,7 +15,7 @@ from .admin import admin
 from .com import Message, StagedMessage
 from .consumer import MultiConsumer, ThreadedMultiConsumer
 
-__version__ = "0.2.3"
+__version__ = "0.2.4"
 
 
 logging.getLogger(__package__).addHandler(logging.NullHandler())
@@ -40,9 +40,18 @@ class app:
         self.consumer_name: str = consumer_name
         self.consumer_cls: MultiConsumer = consumer_cls
         self.kwargs = kwargs
+        self.error_handlers = {}
+
+    def _register_error_handler(self, exc_class, fn):
+        self.error_handlers[exc_class] = fn
+
+    def errorhandler(self, exc_class):
+        def decorator(fn):
+            self._register_error_handler(exc_class, fn)
+        return decorator
 
     def get_consumer(self) -> MultiConsumer:
-        return self.consumer_cls(self.link, self.consumer_name, self.config, **self.kwargs)
+        return self.consumer_cls(self.link, self.consumer_name, self.config, error_handlers=self.error_handlers, **self.kwargs)
 
     def start(self):
         self.get_consumer().run()
