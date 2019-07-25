@@ -7,6 +7,10 @@ import peewee
 from peewee import ModelSelect
 
 
+class MessageError(Exception):
+    pass
+
+
 class TelstarEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, datetime):

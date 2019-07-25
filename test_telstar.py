@@ -9,7 +9,7 @@ import peewee
 from playhouse.db_url import connect
 
 import telstar
-from telstar.com import Message, StagedMessage
+from telstar.com import Message, StagedMessage, MessageError
 from telstar.consumer import Consumer, MultiConsumer, MultiConsumeOnce
 from telstar.producer import StagedProducer
 from marshmallow import fields, Schema, ValidationError
@@ -255,6 +255,68 @@ def test_app_consumer_strictness(realdb, reallink, msg_schema):
 
     with pytest.raises(ValidationError):
         app.run_once()
+
+
+@pytest.mark.integration
+def test_app_consumer_errorhandler(realdb, reallink, msg_schema):
+    app = telstar.app(reallink, consumer_name="c1")
+    m = mock.Mock()
+
+    @app.consumer("group", "mytopic", schema=msg_schema, strict=True)
+    def callback(data: dict):
+        print(data)
+
+    @app.errorhandler(ValidationError)
+    def handler(exc, ack):
+        m()
+
+    telstar.stage("mytopic", dict(name="1", email="invalid"))
+    StagedProducer(reallink, realdb).run_once()
+
+    app.run_once()
+    assert m.call_count == 1
+
+
+@pytest.mark.integration
+def test_app_consumer_errorhandler_can_acknowledge(realdb, reallink, msg_schema):
+    app = telstar.app(reallink, consumer_name="c1")
+    m = mock.Mock()
+
+    @app.consumer("group", "mytopic", schema=msg_schema, strict=True)
+    def callback(data: dict):
+        print(data)
+
+    @app.errorhandler(ValidationError)
+    def handler(exc, ack):
+        m()
+        ack()
+
+    telstar.stage("mytopic", dict(name="1", email="invalid"))
+    StagedProducer(reallink, realdb).run_once()
+
+    app.run_once()
+    app.run_once()
+    assert m.call_count == 1  # The message is ack'ed in the error handler
+
+
+@pytest.mark.integration
+def test_app_consumer_invalid_message(realdb, reallink: redis.Redis, msg_schema):
+    app = telstar.app(reallink, consumer_name="c1")
+    m = mock.Mock()
+
+    @app.consumer("group", "mytopic", schema=msg_schema, strict=True)
+    def callback(data: dict):
+        print(data)
+
+    @app.errorhandler(MessageError)
+    def handler(exc, ack):
+        m()
+        ack()
+
+    reallink.xadd("telstar:stream:mytopic", {"not_uuid": "asd", "not_data": "asd"})
+    app.run_once()
+    app.run_once()
+    assert m.call_count == 1  # The message is ack'ed in the error handler
 
 
 @pytest.mark.integration

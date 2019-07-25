@@ -8,7 +8,7 @@ from typing import Callable, Dict
 
 import redis
 
-from .com import Message, decrement_msg_id, increment_msg_id
+from .com import Message, decrement_msg_id, increment_msg_id, MessageError
 
 # An important concept to understand here is the consumer group which give us the following consumer properties:
 # msg   -> consumer
@@ -30,12 +30,13 @@ log = logging.getLogger(__name__)
 
 class MultiConsumer(object):
 
-    def __init__(self, link: redis.Redis, group_name: str, consumer_name: str, config: dict, block: int = 2000, claim_the_dead_after: int = 20 * 1000) -> None:
+    def __init__(self, link: redis.Redis, group_name: str, consumer_name: str, config: dict, block: int = 2000, claim_the_dead_after: int = 20 * 1000, error_handlers=None) -> None:
         self.link = link
         self.block = block
         self.claim_the_dead_after = claim_the_dead_after
         self.consumer_name = consumer_name
         self.group_name = group_name
+        self.error_handlers = error_handlers or {}
 
         self.processors = {f"telstar:stream:{stream_name}": fn
                            for stream_name, fn in config.items()}
@@ -163,9 +164,15 @@ class MultiConsumer(object):
         pipe.execute()
 
     def work(self, stream_name: bytes, stream_msg_id: bytes, record: Dict[bytes, bytes]) -> None:
-        msg = Message(stream_name,
-                      uuid.UUID(record[Message.IDFieldName].decode("ascii")),
-                      json.loads(record[Message.DataFieldName]))
+        try:
+            msg = Message(stream_name,
+                          uuid.UUID(record[Message.IDFieldName].decode("ascii")),
+                          json.loads(record[Message.DataFieldName]))
+        except KeyError as exc:
+            msg = f"Malformed message, record: {record} does not have fields {Message.IDFieldName} and {Message.DataFieldName} "
+            log.exception(msg)
+            raise MessageError(msg) from exc
+
         done = partial(self.acknowledge, msg, stream_msg_id)
         key = self._seen_key(msg)
         if self.link.get(key):
@@ -196,8 +203,35 @@ class MultiConsumer(object):
         # Sort the message afterwards in order to restore the order they where sent in, this can only be a best effort
         # approach and does not guarantee the correct order when using `xreadgroup` with multiple streams.
         for processed, t in enumerate(sorted(result, key=lambda t: t[1]), start=1):
-            self.work(*t)
+            stream_name, stream_msg_id, record = t
+            try:
+                self.work(stream_name, stream_msg_id, record)
+            except Exception as exc:
+                self._handle_exception(exc, stream_name, stream_msg_id, record)
         return processed
+
+    def _find_error_handler(self, exc):
+        for cls in type(exc).__mro__:
+            handler = self.error_handlers.get(cls)
+            if handler is not None:
+                return handler
+
+    def _handle_exception(self, exc, stream_name, stream_msg_id, record):
+        handler = self._find_error_handler(exc)
+
+        if handler is None:
+            raise exc
+
+        bare_ack = partial(self._bare_ack, stream_name, stream_msg_id)
+        return handler(exc, bare_ack)
+
+    def _bare_ack(self, stream_name, stream_msg_id):
+        check_point_key = self._checkpoint_key(stream_name)
+        pipe = self.link.pipeline()
+
+        pipe.set(check_point_key, stream_msg_id)
+        pipe.xack(stream_name, self.group_name, stream_msg_id)
+        pipe.execute()
 
 
 class Consumer(MultiConsumer):
