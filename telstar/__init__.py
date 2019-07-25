@@ -15,7 +15,7 @@ from .admin import admin
 from .com import Message, StagedMessage
 from .consumer import MultiConsumer, ThreadedMultiConsumer
 
-__version__ = "0.2.3"
+__version__ = "0.2.4"
 
 
 logging.getLogger(__package__).addHandler(logging.NullHandler())
