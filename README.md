@@ -25,6 +25,7 @@
 </p>
 
 ## 📝 Table of Contents
+
 - [About](#about)
 - [Getting Started](#getting_started)
 - [Deployment](#deployment)
@@ -36,28 +37,50 @@
 - [Acknowledgments](#acknowledgement)
 
 ## 🧐 About <a name = "about"></a>
-In order to run our distributed architecture we needed a way to receive and produces messages with a an almost exactly once delivery design.
-We think that by packing up our assumptions into a seperated lib we make easy for other service to adhere to our intial design and/or comply to future changes.
 
-Another aspect why we put this is out is, that we have not found a package that does what we needed. And as we ourselves use quite a lot OSS we wanted to give back this project.
+In order to run our distributed architecture at [@bitspark](https://bitspark.de) we needed a way to receive and produces messages with an exactly once delivery design.
+We think that, by packing up our assumptions into a separate library we can make it easy for other services to adhere to our initial design and/or comply to future changes.
+
+Another aspect for open sourcing this library is that we have not found a package that does what we needed. And as we ourselves use OSS in many critical part of our infrastructure we wanted to give back this project.
 
 ## 🏁 Getting Started <a name = "getting_started"></a>
+
 These instructions will get you a copy of the project up and running on your local machine for development and testing purposes. See [deployment](#deployment) for notes on how to deploy the project on a live system.
 
 ### Prerequisites
+
 You will need `python >= 3.6` as we use type annotations and a running `redis` server with at least version `>= 5.0`.
 
 ### Installing
+
 A step by step series of examples that tell you how to get a development env running.
 Install everything using `pip`
 
-```
+```bash
 pip install telstar
 ```
 
-#### The Producer - how to get data into the system
+## 🔧 Running the tests <a name = "tests"></a>
+
+This package comes with an end to end test which simulates
+a scenario with all sorts of failures that can occur during operation. Here is how to run the tests.
+
+```bash
+git clone git@github.com:Bitspark/telstar.git
+pip install -r requirements.txt
+
+./telstar/tests/test_telstar.sh
+pytest --ignore=telstar/
+```
+
+## 🎈 Usage <a name="usage"></a>
+
+This package uses consumer groups and redis streams as a backend to deliver messages exactly once. In order to understand redis streams and what the `Consumer` can do for you to read go and read [Redis Streams](https://redis.io/topics/)
+
+### The Producer - how to get data into the system
 
 Create a producer in our case this produces different message with the same data every .5 seconds
+
 ```python
 import redis
 import os
@@ -67,12 +90,12 @@ from time import sleep
 from telstar.producer import Producer
 from telstar.com import Message
 
-link = redis.from_url(os.environ["REDIS"])
+link = redis.from_url("redis://")
 
 def producer_fn():
-    topic = "mytopic"
+    topic = "userSignedUp"
     uuid = uuid4() # Based on this value the system deduplicates messages
-    data = dict(key="value")
+    data = dict(email="test1@example.com", field="value")
     msgs = [Message(topic, uuid, data)]
 
     def done():
@@ -82,72 +105,79 @@ def producer_fn():
 
 Producer(link, producer_fn, context_callable=None).run()
 ```
+
 Start the producer with the following command
 
 ```bash
-REDIS=redis:// python producer.py
+python producer.py
 ```
 
-#### The Consumer - how to get data out of the system
+### The Consumer - how to get data out of the system
+
 Now lets creates consumer
 
 ```python
 import redis
-from telstar.consumer import Consumer
+import telstar
+
+from marshmallow import EXCLUDE, Schema, fields
+
+redis = redis.from_url("redis://")
+consumer_name = "local.dev"
+
+app = telstar.app(redis, consumer_name=consumer_name, block=20 * 1000)
 
 
+class UserSchema(Schema):
+    email = fields.Email(required=True)
 
-link = redis.from_url(os.environ["REDIS"])
+    class Meta:
+        unknown = EXCLUDE
 
-def consumer(consumer, record, done):
-    print(record.__dict__)
-    done() # You need to call done otherwise we will get the same message over and over again
 
-Consumer(link=link, group_name="mygroup", consumer_name="consumer-1",
-         config={"mystream": consumer}).run()
+@app.consumer("mygroup", ["userSignedUp"], schema=UserSchema, strict=True, acknowledge_invalid=False)
+def consumer(record: dict):
+    print(record)
 
+if __name__ == "__main__":
+    app.start()
 ```
 
 Now start the consumer as follows:
+
 ```bash
-REDIS=redis:// python consumer.py
+python consumer.py
 ```
+
 You should see output like the following
+
 ```bash
-{'stream': 'mytopic', 'msg_uuid': b'64357230-8ff3-4eb9-8c06-757a42e961e2', 'data': {'key': 'value'}}
-{'stream': 'mytopic', 'msg_uuid': b'a2443ae2-549e-49ab-9256-3f13575ba6ae', 'data': {'key': 'value'}}
-{'stream': 'mytopic', 'msg_uuid': b'1c1d9f8c-e37b-43be-bab2-45caa10f233d', 'data': {'key': 'value'}}
-{'stream': 'mytopic', 'msg_uuid': b'5da942ab-4aec-4a7f-bd93-a97168a8d3ad', 'data': {'key': 'value'}}
+{"email": "test1@example.com"}
+{"email": "test1@example.com"}
+{"email": "test1@example.com"}
 ```
+
 Until the stream is exhausted.
 
-## 🔧 Running the tests <a name = "tests"></a>
-This package comes with an end to end test which simulates
-a scenario with all sorts of failures that can occur during operation. Here is how to run the tests.
-
-```
-git clone git@github.com:Bitspark/telstar.git
-pip install -r requirements.txt
-./telstar/tests/test_telstar.sh
-```
-
-## 🎈 Usage <a name="usage"></a>
-This package uses consumer groups and redis streams as a backend to deliver messages exactly once. In order to understand redis streams and what the `Consumer` can do for you to read -> https://redis.io/topics/streams-intro
 
 ## 🚀 Deployment <a name = "deployment"></a>
-We currently use Kubernetes to deploy our produces and consumers as simple jobs, which of course is a bit suboptimal, it would be better to deploy them as replica set.
+
+We currently use Kubernetes to deploy our producers and consumers as simple jobs, which of course is a bit suboptimal, it would be better to deploy them as replica set.
 
 ## ⛏️ Built Using <a name = "built_using"></a>
+
 - [Redis](https://redis.io/) - Swiss Army Knive
 - [Peewee](http://docs.peewee-orm.com/en/latest/) - ORM for testing
 
 ## ✍️ Authors <a name = "authors"></a>
+
 - [@kairichard](https://github.com/kairichard) - Idea & Initial work
 
 See also the list of [contributors](https://github.com/Bitspark/telstar/contributors) who participated in this project.
 
 ## 🎉 Acknowledgements <a name = "acknowledgement"></a>
-- Thanks for [@bitspark](https://github.com/Bitspark/) for giving me the oppertunity to work on this.
+
+- Thanks for [@bitspark](https://github.com/Bitspark/) for giving me the opportunity to work on this.
 - Inspiration/References and reading material
   - https://walrus.readthedocs.io/en/latest/streams.html
   - https://redis.io/topics/streams-intro
