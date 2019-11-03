@@ -20,7 +20,7 @@
 
 <p align="center">
     This library is what came out of creating a distributed service architecture for one of our products.
-    Telstar makes it easy to write consumer groups and producers against redis streams.
+    Telstar makes it easy to write consumer groups and producers against Redis streams.
     <br>
 </p>
 
@@ -38,10 +38,10 @@
 
 ## 🧐 About <a name = "about"></a>
 
-In order to run our distributed architecture at [@bitspark](https://bitspark.de) we needed a way to receive and produces messages with an exactly once delivery design.
-We think that, by packing up our assumptions into a separate library we can make it easy for other services to adhere to our initial design and/or comply to future changes.
+To run our distributed architecture at [@bitspark](https://bitspark.de) we needed a way to produce and consume messages with an exactly-once delivery design.
+We think that, by packing up our assumptions into a separate library, we can make it easy for other services to adhere to our initial design and/or comply with future changes.
 
-Another aspect for open sourcing this library is that we have not found a package that does what we needed. And as we ourselves use OSS in many critical part of our infrastructure we wanted to give back this project.
+Another aspect of open-sourcing this library is that we have not found a package that does what we needed. And as we use OSS in many critical parts of our infrastructure, we wanted to give back this project.
 
 ## 🏁 Getting Started <a name = "getting_started"></a>
 
@@ -49,12 +49,12 @@ These instructions will get you a copy of the project up and running on your loc
 
 ### Prerequisites
 
-You will need `python >= 3.6` as we use type annotations and a running `redis` server with at least version `>= 5.0`.
+You will need `python >= 3.6` as we use type annotations and a running `Redis` server with at least version `>= 5.0`.
 
 ### Installing
 
 A step by step series of examples that tell you how to get a development env running.
-Install everything using `pip`
+Install everything using `pip.`
 
 ```bash
 pip install telstar
@@ -62,7 +62,7 @@ pip install telstar
 
 ## 🔧 Running the tests <a name = "tests"></a>
 
-This package comes with an end to end test which simulates
+This package comes with an end to end test, which simulates
 a scenario with all sorts of failures that can occur during operation. Here is how to run the tests.
 
 ```bash
@@ -75,14 +75,14 @@ pytest --ignore=telstar/
 
 ## 🎈 Usage <a name="usage"></a>
 
-This package uses consumer groups and redis streams as a backend to deliver messages exactly once. In order to understand redis streams and what the `Consumer` can do for you to read go and read [Redis Streams](https://redis.io/topics/)
+This package uses consumer groups and Redis streams as a backend to deliver messages exactly once. To understand Redis streams and what the `Consumer` can do for you to read go and read [Redis Streams](https://redis.io/topics/)
 
 ### The Producer - how to get data into the system
 
-Create a producer in our case this produces different message with the same data every .5 seconds
+Create a producer in our case this produces a different message with the same data every .5 seconds
 
 ```python
-import redis
+import Redis
 import os
 from uuid import uuid4
 from time import sleep
@@ -106,7 +106,7 @@ def producer_fn():
 Producer(link, producer_fn, context_callable=None).run()
 ```
 
-Start the producer with the following command
+Start the producer with the following command.
 
 ```bash
 python producer.py
@@ -114,10 +114,10 @@ python producer.py
 
 ### The Consumer - how to get data out of the system
 
-Now lets creates consumer
+Now let's create consumer
 
 ```python
-import redis
+import Redis
 import telstar
 
 from marshmallow import EXCLUDE, Schema, fields
@@ -149,7 +149,7 @@ Now start the consumer as follows:
 python consumer.py
 ```
 
-You should see output like the following
+You should see output like the following.
 
 ```bash
 {"email": "test1@example.com"}
@@ -162,7 +162,7 @@ Until the stream is exhausted.
 
 ## 🚀 Deployment <a name = "deployment"></a>
 
-We currently use Kubernetes to deploy our producers and consumers as simple jobs, which of course is a bit suboptimal, it would be better to deploy them as replica set.
+We currently use Kubernetes to deploy our producers and consumers as simple jobs, which, of course, is a bit suboptimal. It would be better to deploy them as a replica set.
 
 ## ⛏️ Built Using <a name = "built_using"></a>
 
@@ -177,7 +177,7 @@ See also the list of [contributors](https://github.com/Bitspark/telstar/contribu
 
 ## 🎉 Acknowledgements <a name = "acknowledgement"></a>
 
-- Thanks for [@bitspark](https://github.com/Bitspark/) for giving me the opportunity to work on this.
+- Thanks for [@bitspark](https://github.com/Bitspark/) for allowing me to work on this.
 - Inspiration/References and reading material
   - https://walrus.readthedocs.io/en/latest/streams.html
   - https://redis.io/topics/streams-intro
