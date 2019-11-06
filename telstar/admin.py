@@ -13,7 +13,9 @@ class admin:
 
     def get_streams(self, match: None = None) -> List["Stream"]:
         match = match or ""
-        streams = self.link.scan_iter(match=f"telstar:stream:{match}*")
+        # We wanted to use `scan_iter` but for an yet unknown reason
+        # `SCAN` take hundreds of iterations to find all streams.
+        streams = self.link.keys(f"telstar:stream:{match}*")
         return [Stream(self, s) for s in streams]
 
     def get_consumers(self) -> List["Consumer"]:
