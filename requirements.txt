@@ -20,7 +20,7 @@ pylint==2.4.3
 PyMySQL==0.9.3
 pyparsing==2.4.5
 pytest==5.3.0
-pytest-mock==1.10.4
+pytest-mock==1.13.0
 pytest-pudb==0.7.0
 pytoml==0.1.21
 redis==3.3.11
