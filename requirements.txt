@@ -19,7 +19,7 @@ py==1.8.0
 pylint==2.4.4
 PyMySQL==0.9.3
 pyparsing==2.4.5
-pytest==5.3.0
+pytest==5.3.2
 pytest-mock==1.13.0
 pytest-pudb==0.7.0
 pytoml==0.1.21
