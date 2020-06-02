@@ -24,7 +24,7 @@ pytest-mock==1.13.0
 pytest-pudb==0.7.0
 pytoml==0.1.21
 redis==3.3.11
-requests==2.22.0
+requests==2.23.0
 six==1.13.0
 typed-ast==1.4.0
 urllib3==1.25.7
