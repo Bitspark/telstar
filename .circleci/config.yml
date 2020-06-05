@@ -20,6 +20,9 @@ jobs:
             - "./venv"
 
   test:
+    parameters:
+      orm:
+        type: string
     working_directory: ~/telstar
     docker:
       - image: circleci/python:3.6
@@ -28,6 +31,9 @@ jobs:
       - restore_cache:
           key: v1-deps-{{ .Branch }}-{{ checksum "requirements.txt" }}
       - run:
+          environment:
+            ORM: << parameters.orm >>
+
           command: |
             source venv/bin/activate
             pytest -m 'not integration' --ignore=telstar/
@@ -93,6 +99,10 @@ workflows:
     jobs:
       - build
       - test:
+          name: integration
+          matrix:
+            parameters:
+              orm: [peewee]
           requires:
             - build
 
