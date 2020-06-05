@@ -83,7 +83,7 @@ def realdb() -> peewee.Database:
 @pytest.fixture
 def db() -> peewee.Database:
     connection_uri = "sqlite:///:memory:"
-    if os.environ..get("orm") == "peewee":
+    if os.environ.get("orm") == "peewee":
         tlconfig.staging.repository = StagedMessagePeeWee
         return peewee_db_setup(connection_uri)
 
