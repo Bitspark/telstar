@@ -3,21 +3,21 @@ import uuid
 from datetime import datetime
 from unittest import mock
 
+import peewee
 import pytest
 import redis
-import peewee
+from marshmallow import Schema, ValidationError, fields
 from playhouse.db_url import connect
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 import telstar
+from telstar import config as tlconfig
 from telstar.com import Message, MessageError
 from telstar.com.pw import StagedMessage as StagedMessagePeeWee
 from telstar.com.sqla import StagedMessageRepository as StagedMessageSqlAlchemy
-from telstar import config as tlconfig
-from telstar.consumer import Consumer, MultiConsumer, MultiConsumeOnce
+from telstar.consumer import Consumer, MultiConsumeOnce, MultiConsumer
 from telstar.producer import StagedProducer
-from marshmallow import fields, Schema, ValidationError
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 
 def pytest_configure(config):

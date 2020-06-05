@@ -1,7 +1,6 @@
 """
 Telstar is a package to write producer and consumers groups against redis streams.
 """
-from .config import staging
 import inspect
 import logging
 from datetime import datetime
@@ -14,6 +13,7 @@ from marshmallow import Schema, ValidationError
 
 from .admin import admin
 from .com import Message
+from .config import staging
 from .consumer import MultiConsumer, ThreadedMultiConsumer
 
 __version__ = "0.3.0"

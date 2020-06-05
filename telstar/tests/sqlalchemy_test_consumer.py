@@ -1,19 +1,18 @@
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine, Column, String, BIGINT, UniqueConstraint
-
 import logging
 import os
 import random
 import sys
 from time import sleep
 
-import redis
 import pymysql
+import redis
+from sqlalchemy import BIGINT, Column, String, UniqueConstraint, create_engine
+from sqlalchemy.orm import sessionmaker
 
 from telstar import config as tlconfig
 from telstar.com import Message
+from telstar.com.sqla import Base, StagedMessageRepository
 from telstar.consumer import MultiConsumer
-from telstar.com.sqla import StagedMessageRepository, Base
 
 logger = logging.getLogger('telstar')
 logger.addHandler(logging.StreamHandler())

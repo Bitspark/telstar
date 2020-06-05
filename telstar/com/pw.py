@@ -1,10 +1,10 @@
 # from __future__ import annotations
 import json
 import uuid
+from typing import TYPE_CHECKING, Dict, List, Union
+
 import peewee
 from peewee import ModelSelect
-
-from typing import Dict, Union, TYPE_CHECKING, List
 
 if TYPE_CHECKING:
     from . import Message

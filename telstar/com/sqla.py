@@ -1,11 +1,11 @@
-from sqlalchemy.dialects import postgresql, mysql, sqlite
-from sqlalchemy.dialects.postgresql import UUID as psqlUUID
-from sqlalchemy.types import TypeDecorator, BINARY
-import uuid
 import json
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, String, Text, Boolean, TIMESTAMP, BigInteger
+import uuid
 
+from sqlalchemy import TIMESTAMP, BigInteger, Boolean, Column, String, Text
+from sqlalchemy.dialects import mysql, postgresql, sqlite
+from sqlalchemy.dialects.postgresql import UUID as psqlUUID
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.types import BINARY, TypeDecorator
 
 Base = declarative_base()
 
