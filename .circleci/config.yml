@@ -99,10 +99,9 @@ workflows:
     jobs:
       - build
       - test:
-          name: integration
           matrix:
             parameters:
-              orm: [peewee]
+              orm: [peewee, sqlalchemy]
           requires:
             - build
 
@@ -116,7 +115,7 @@ workflows:
                   ./telstar/tests/test_telstar.sh,
                   pytest -m 'integration' --ignore=telstar/,
                 ]
-              orm: [peewee]
+              orm: [peewee, sqlalchemy]
           requires:
             - build
             - test
