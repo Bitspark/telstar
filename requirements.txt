@@ -1,7 +1,7 @@
 astroid==2.3.3
 atomicwrites==1.3.0
 attrs==19.3.0
-certifi==2019.11.28
+certifi==2020.4.5.1
 chardet==3.0.4
 docutils==0.16
 flit==1.3
