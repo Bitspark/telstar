@@ -53,17 +53,16 @@ class StagedProducer(Producer):
         producer = self
 
         def puller() -> Tuple[List[Message], Callable[[], None]]:
-            qs = StagedMessage.unsent()[:producer.batch_size]
-            msgs = [e.to_msg() for e in qs]
-            log.debug(f"Found {len(msgs)} messages to be send")
+            unsent_messages = StagedMessage.unsent()[:producer.batch_size]
+            telstar_messages = [msg.to_msg() for msg in unsent_messages]
+            log.debug(f"Found {len(telstar_messages)} messages to be send")
 
             def done():
-                ids = list(map(lambda l: l.id, qs))
-                if ids:
-                    log.debug(f"Attempting to mark {len(ids)} messages as being sent")
-                    result = StagedMessage.update(sent=True).where(StagedMessage.id << ids).execute()
+                if unsent_messages:
+                    log.debug(f"Attempting to mark {len(unsent_messages)} messages as being sent")
+                    result = StagedMessage.mark_as_sent(unsent_messages)
                     log.debug(f"Result was: {result}")
-                sleep(self.wait)
+                sleep(producer.wait)
 
-            return msgs, done
+            return telstar_messages, done
         return puller

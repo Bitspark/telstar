@@ -1,7 +1,7 @@
 import json
 import uuid
 from datetime import datetime
-from typing import Dict, Union
+from typing import Dict, Union, List
 
 import peewee
 from peewee import ModelSelect
@@ -59,6 +59,11 @@ class StagedMessage(peewee.Model):
     @classmethod
     def unsent(cls) -> ModelSelect:
         return cls.select().where(cls.sent == False)  # noqa
+
+    @classmethod
+    def mark_as_sent(cls, messages: List["Message"]):
+        ids = list(map(lambda m: m.id, messages))
+        cls.update(sent=True).where(StagedMessage.id << ids).execute()
 
     def to_msg(self) -> Message:
         return Message(self.topic, self.msg_uid, self.data)
