@@ -50,8 +50,10 @@ class StagedProducer(Producer):
         super().__init__(link, self.create_puller(), StagedMessage._meta.database.atomic)
 
     def create_puller(self) -> Callable:
+        producer = self
+
         def puller() -> Tuple[List[Message], Callable[[], None]]:
-            qs = StagedMessage.unsent().limit(self.batch_size).order_by(StagedMessage.id)
+            qs = StagedMessage.unsent().order_by(StagedMessage.id)[:producer.batch_size]
             msgs = [e.to_msg() for e in qs]
             log.debug(f"Found {len(msgs)} messages to be send")
 
