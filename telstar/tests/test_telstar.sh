@@ -135,8 +135,8 @@ main() {
     PENDING_STREAM_2=$(redis-cli -u $REDIS --csv XPENDING telstar:stream:$STREAM_NAME_TWO validation)
     PENDING_STREAM_3=$(redis-cli -u $REDIS --csv XPENDING telstar:stream:$STREAM_NAME_TWO validation2)
 
-    test "$PENDING_STREAM_1" == "0,NIL,NIL,NIL" || { echo "$STREAM_NAME validation has pending records" && exit 1; }
-    test "$PENDING_STREAM_2" == "0,NIL,NIL,NIL" || { echo "$STREAM_NAME validation2 has pending records" && exit 1; }
-    test "$PENDING_STREAM_3" == "0,NIL,NIL,NIL" || { echo "$STREAM_NAME_TWO validation2 has pending records" && exit 1; }
+    test "$PENDING_STREAM_1" == "0,NULL,NULL,NULL" || { echo "$STREAM_NAME validation has pending records" && exit 1; }
+    test "$PENDING_STREAM_2" == "0,NULL,NULL,NULL" || { echo "$STREAM_NAME validation2 has pending records" && exit 1; }
+    test "$PENDING_STREAM_3" == "0,NULL,NULL,NULL" || { echo "$STREAM_NAME_TWO validation2 has pending records" && exit 1; }
 }
 main
