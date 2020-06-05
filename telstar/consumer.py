@@ -152,6 +152,7 @@ class MultiConsumer(object):
         # If this key changes before we execute the pipeline than the ack fails and this the processor reverts all the work.
         # Which is exactly what we want in this case as the work has already been completed by another consumer.
         pipe.watch(seen_key)
+        pipe.multi()
 
         # Mark this as a seen key for 14 Days meaning if the message reappears after 14 days we reprocess it
         pipe.set(seen_key, 1, ex=14 * 24 * 60 * 60)  # 14 days
@@ -162,6 +163,7 @@ class MultiConsumer(object):
         # Acknowledge the actual message
         pipe.xack(f"telstar:stream:{msg.stream}", self.group_name, stream_msg_id)
         pipe.execute()
+        pipe.reset()
 
     def work(self, stream_name: bytes, stream_msg_id: bytes, record: Dict[bytes, bytes]) -> None:
         try:
