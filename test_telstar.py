@@ -3,16 +3,27 @@ import uuid
 from datetime import datetime
 from unittest import mock
 
+import peewee
 import pytest
 import redis
-import peewee
+from marshmallow import Schema, ValidationError, fields
 from playhouse.db_url import connect
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
 
 import telstar
-from telstar.com import Message, StagedMessage, MessageError
-from telstar.consumer import Consumer, MultiConsumer, MultiConsumeOnce
+from telstar import config as tlconfig
+from telstar.com import Message, MessageError
+from telstar.com.pw import StagedMessage as StagedMessagePeeWee
+from telstar.com.sqla import StagedMessageRepository as StagedMessageSqlAlchemy
+from telstar.consumer import Consumer, MultiConsumeOnce, MultiConsumer
 from telstar.producer import StagedProducer
-from marshmallow import fields, Schema, ValidationError
+
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "integration", "uses real redis and mysql"
+    )
 
 
 @pytest.fixture
@@ -35,22 +46,50 @@ def reallink() -> redis.Redis:
     return client
 
 
-@pytest.fixture
-def realdb() -> peewee.Database:
-    db = connect(os.environ.get("DATABASE", "postgres://127.0.0.1:5432/telstar-integration-test"))
-    tables = [StagedMessage]
+def peewee_db_setup(connection_uri):
+    tables = [tlconfig.staging.repository]
+    db = connect(connection_uri)
     db.bind(tables)
     db.drop_tables(tables)
     db.create_tables(tables)
     return db
 
 
+def sqlalchemy_db_setup(connection_uri):
+    from telstar.com.sqla import Base
+    engine = create_engine(connection_uri, echo=True)
+    Base.metadata.drop_all(engine)
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    tlconfig.staging.repository.setup(session)
+    return session
+
+
+@pytest.fixture
+def realdb() -> peewee.Database:
+    import pymysql
+    pymysql.install_as_MySQLdb()
+    connection_uri = os.environ.get("DATABASE", "postgres://127.0.0.1:5432/telstar-integration-test")
+    if os.environ.get("ORM") == "peewee":
+        tlconfig.staging.repository = StagedMessagePeeWee
+        return peewee_db_setup(connection_uri)
+
+    if os.environ.get("ORM") == "sqlalchemy":
+        tlconfig.staging.repository = StagedMessageSqlAlchemy
+        return sqlalchemy_db_setup(connection_uri)
+
+
 @pytest.fixture
 def db() -> peewee.Database:
-    db = connect("sqlite:///:memory:")
-    db.bind([StagedMessage])
-    db.create_tables([StagedMessage])
-    return db
+    connection_uri = "sqlite:///:memory:"
+    if os.environ.get("ORM") == "peewee":
+        tlconfig.staging.repository = StagedMessagePeeWee
+        return peewee_db_setup(connection_uri)
+
+    if os.environ.get("ORM") == "sqlalchemy":
+        tlconfig.staging.repository = StagedMessageSqlAlchemy
+        return sqlalchemy_db_setup(connection_uri)
 
 
 @pytest.fixture
@@ -181,9 +220,10 @@ def test_checkpoint_key(consumer: Consumer):
     assert consumer._checkpoint_key("mytopic") == "telstar:checkpoint:mytopic:cg:mygroup:myname"
 
 
+@pytest.mark.skipif(not os.environ.get("PEEWEE"), reason="Peewee specific selector")
 def test_staged_event(db):
     telstar.stage("mytopic", dict(a=1))
-    assert len(StagedMessage.select().where(StagedMessage.topic == "mytopic")) == 1
+    assert len(tlconfig.staging.repository.select().where(tlconfig.staging.repository.topic == "mytopic")) == 1
 
 
 def test_staged_producer(db, link):
@@ -394,6 +434,7 @@ def test_consumer_once(realdb, reallink):
     assert m.run() == 5  # Processes the remaining five
     assert m.run() == 0  # Nothing to process anylonger
 
+    # The message should appear in the order they where sent in.
     assert result == list(range(10))
 
 

@@ -12,10 +12,11 @@ import redis
 from marshmallow import Schema, ValidationError
 
 from .admin import admin
-from .com import Message, StagedMessage
+from .com import Message
+from .config import staging
 from .consumer import MultiConsumer, ThreadedMultiConsumer
 
-__version__ = "0.2.5"
+__version__ = "0.3.0"
 
 
 logging.getLogger(__package__).addHandler(logging.NullHandler())
@@ -25,12 +26,12 @@ admin = admin
 
 
 def stage(topic: str, data: Dict[str, Union[int, str, datetime, UUID]]) -> UUID:
-    e = StagedMessage.create(topic=topic, data=data)
+    e = staging.repository.create(topic=topic, data=data)
     return e.msg_uid
 
 
 def staged() -> List[Message]:
-    return [e.to_msg() for e in StagedMessage.unsent()]
+    return [e.to_telstar() for e in staging.repository.unsent()]
 
 
 class app:

@@ -20,6 +20,9 @@ jobs:
             - "./venv"
 
   test:
+    parameters:
+      orm:
+        type: string
     working_directory: ~/telstar
     docker:
       - image: circleci/python:3.6
@@ -28,6 +31,9 @@ jobs:
       - restore_cache:
           key: v1-deps-{{ .Branch }}-{{ checksum "requirements.txt" }}
       - run:
+          environment:
+            ORM: << parameters.orm >>
+
           command: |
             source venv/bin/activate
             pytest -m 'not integration' --ignore=telstar/
@@ -37,6 +43,8 @@ jobs:
       command:
         type: string
       redis_image:
+        type: string
+      orm:
         type: string
     working_directory: ~/telstar
     docker:
@@ -56,6 +64,8 @@ jobs:
       - restore_cache:
           key: v1-deps-{{ .Branch }}-{{ checksum "requirements.txt" }}
       - run:
+          environment:
+            ORM: << parameters.orm >>
           command: |
             pushd `pwd`
             cd /tmp
@@ -89,6 +99,9 @@ workflows:
     jobs:
       - build
       - test:
+          matrix:
+            parameters:
+              orm: [peewee, sqlalchemy]
           requires:
             - build
 
@@ -102,8 +115,10 @@ workflows:
                   ./telstar/tests/test_telstar.sh,
                   pytest -m 'integration' --ignore=telstar/,
                 ]
+              orm: [peewee, sqlalchemy]
           requires:
             - build
+            - test
 
       - release:
           filters:
@@ -111,5 +126,4 @@ workflows:
               only:
                 - master
           requires:
-            - test
             - integration-test
