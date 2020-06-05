@@ -21,10 +21,15 @@ export DATABASE="${DATABASE:-mysql://root:root@127.0.0.1:3306/test}"
 export PYTHONPATH="${PYTHONPATH}:${SCRIPTPATH}../}"
 export PYTHONUNBUFFERED=True
 
+export ORM="${ORM:-peewee}"
+
 readonly SCRIPTPATH="$(
     cd "$(dirname "$0")"
     pwd -P
 )"
+
+export CONSUMER_SCRIPT="${SCRIPTPATH}/${ORM}_test_consumer.py"
+export PRODUCER_SCRIPT="${SCRIPTPATH}/${ORM}_test_producer.py"
 
 function kill_childs_and_exit() {
     echo "Attempting to kill all childs"
@@ -46,7 +51,7 @@ fi
 main() {
 
     # Start the first customer with `setup` which drops and creates the needed tables in mysql
-    CONSUMER_NAME=1 python $SCRIPTPATH/test_consumer.py setup &
+    CONSUMER_NAME=1 python $CONSUMER_SCRIPT setup &
     CONSUMER_1=$! # This saves the PID of the last command - which we can use to `kill` the process later
 
     # What for the creation to be done
@@ -54,24 +59,24 @@ main() {
 
     # Start more consumers
     # The `SLEEPINESS` will result in race conditions in the database, which is what we want for testing
-    SLEEPINESS=20 CONSUMER_NAME=2 python $SCRIPTPATH/test_consumer.py &
+    SLEEPINESS=20 CONSUMER_NAME=2 python $CONSUMER_SCRIPT &
     CONSUMER_2=$!
 
-    CONSUMER_NAME=3 python $SCRIPTPATH/test_consumer.py &
+    CONSUMER_NAME=3 python $CONSUMER_SCRIPT &
     CONSUMER_3=$!
 
     # Create a producer that double sends messages because it does not delete them after sending.
-    KEEPEVENTS=1 RANGE_FROM=1 RANGE_TO=101 python $SCRIPTPATH/test_producer.py setup create &
+    KEEPEVENTS=1 RANGE_FROM=1 RANGE_TO=101 python $PRODUCER_SCRIPT setup create &
     PRODUCER_1=$!
 
     sleep 2
 
     # Create another producer that keeps double sending
-    KEEPEVENTS=1 python $SCRIPTPATH/test_producer.py &
+    KEEPEVENTS=1 python $PRODUCER_SCRIPT &
     PRODUCER_2=$!
 
     # Create a producer that emits messages onto the second stream
-    RANGE_FROM=1 RANGE_TO=101 STREAM_NAME=$STREAM_NAME_TWO python $SCRIPTPATH/test_producer.py create &
+    RANGE_FROM=1 RANGE_TO=101 STREAM_NAME=$STREAM_NAME_TWO python $PRODUCER_SCRIPT create &
     PRODUCER_TWO=$!
 
     # Since CONSUMER_1 is in the background in already has consumed some messages from the stream
@@ -85,7 +90,7 @@ main() {
     kill -0 $PRODUCER_2 && kill -9 $PRODUCER_2
 
     # Now we restart CONSUMER_1
-    CONSUMER_NAME=1 python $SCRIPTPATH/test_consumer.py &
+    CONSUMER_NAME=1 python $CONSUMER_SCRIPT &
     CONSUMER_1=$!
 
     # Let all consumers process a bit more data
@@ -99,11 +104,11 @@ main() {
     kill $CONSUMER_2
 
     # Create another producer that generates the rest of the data but now also delete what was send already
-    RANGE_FROM=101 RANGE_TO=201 python $SCRIPTPATH/test_producer.py create &
+    RANGE_FROM=101 RANGE_TO=201 python $PRODUCER_SCRIPT create &
     PRODUCER_3=$!
 
     # Start a new one
-    CONSUMER_NAME=4 python $SCRIPTPATH/test_consumer.py &
+    CONSUMER_NAME=4 python $CONSUMER_SCRIPT &
     CONSUMER_4=$!
 
     # Wait for `CONSUMER_4` to process all data
@@ -114,14 +119,14 @@ main() {
     kill -0 $PRODUCER_TWO && kill -9 $PRODUCER_TWO
 
     # Restart `CONSUMER_4` and kill it later
-    CONSUMER_NAME=4 python $SCRIPTPATH/test_consumer.py &
+    CONSUMER_NAME=4 python $CONSUMER_SCRIPT &
     CONSUMER_4=$!
 
     sleep 30
     kill -0 $CONSUMER_4 && kill -9 $CONSUMER_4
 
     # Create a new consumer group that reads everything from the beginning of time.
-    SLEEPINESS=1 CONSUMER_NAME=4 GROUP_NAME=validation2 python $SCRIPTPATH/test_consumer.py &
+    SLEEPINESS=1 CONSUMER_NAME=4 GROUP_NAME=validation2 python $CONSUMER_SCRIPT &
     NEW_CONSUMER=$!
 
     sleep 10

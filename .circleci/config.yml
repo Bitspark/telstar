@@ -38,6 +38,8 @@ jobs:
         type: string
       redis_image:
         type: string
+      orm:
+        type: string
     working_directory: ~/telstar
     docker:
       - image: circleci/python:3.6
@@ -56,6 +58,8 @@ jobs:
       - restore_cache:
           key: v1-deps-{{ .Branch }}-{{ checksum "requirements.txt" }}
       - run:
+          environment:
+            ORM: << parameters.orm >>
           command: |
             pushd `pwd`
             cd /tmp
@@ -102,6 +106,7 @@ workflows:
                   ./telstar/tests/test_telstar.sh,
                   pytest -m 'integration' --ignore=telstar/,
                 ]
+              orm: [peewee]
           requires:
             - build
 

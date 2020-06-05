@@ -20,6 +20,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 
+def pytest_configure(config):
+    config.addinivalue_line(
+        "integration", "uses real redis and mysql"
+    )
+
+
 @pytest.fixture
 def msg_schema() -> Schema:
     class MyObjSchema(Schema):
@@ -65,11 +71,11 @@ def realdb() -> peewee.Database:
     import pymysql
     pymysql.install_as_MySQLdb()
     connection_uri = os.environ.get("DATABASE", "postgres://127.0.0.1:5432/telstar-integration-test")
-    if os.environ.get("PEEWEE"):
+    if os.environ.get("orm") == "peewee":
         tlconfig.staging.repository = StagedMessagePeeWee
         return peewee_db_setup(connection_uri)
 
-    if os.environ.get("SQLALCHEMY"):
+    if os.environ..get("orm") == "sqlalchemy":
         tlconfig.staging.repository = StagedMessageSqlAlchemy
         return sqlalchemy_db_setup(connection_uri)
 
@@ -77,11 +83,11 @@ def realdb() -> peewee.Database:
 @pytest.fixture
 def db() -> peewee.Database:
     connection_uri = "sqlite:///:memory:"
-    if os.environ.get("PEEWEE"):
+    if os.environ..get("orm") == "peewee":
         tlconfig.staging.repository = StagedMessagePeeWee
         return peewee_db_setup(connection_uri)
 
-    if os.environ.get("SQLALCHEMY"):
+    if os.environ..get("orm") == "sqlalchemy":
         tlconfig.staging.repository = StagedMessageSqlAlchemy
         return sqlalchemy_db_setup(connection_uri)
 
