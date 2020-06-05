@@ -37,6 +37,14 @@ class StagedMessage(peewee.Model):
         ids = list(map(lambda m: m.id, messages))
         cls.update(sent=True).where(StagedMessage.id << ids).execute()
 
+    @classmethod
+    def get_transaction_wrapper(cls):
+        return cls._meta.database.atomic
+
+    @classmethod
+    def setup(cls, database):
+        return cls.bind(database)
+
     def to_telstar(self) -> "Message":
         from . import Message
         return Message(self.topic, self.msg_uid, self.data)

@@ -3,7 +3,6 @@ import logging
 from time import sleep
 from typing import Callable, List, Optional, Tuple
 
-from peewee import Database
 from redis.client import Redis
 
 from .com import Message
@@ -43,12 +42,12 @@ class Producer(object):
 
 
 class StagedProducer(Producer):
-    def __init__(self, link: Redis, database: Database, batch_size: int = 5, wait: float = 0.5) -> None:
+    def __init__(self, link: Redis, database, batch_size: int = 5, wait: float = 0.5) -> None:
         self.batch_size = batch_size
         self.wait = wait
-        staging.model.bind(database)
+        staging.model.setup(database)
 
-        super().__init__(link, self.create_puller(), staging.model._meta.database.atomic)
+        super().__init__(link, self.create_puller(), staging.model.get_transaction_wrapper())
 
     def create_puller(self) -> Callable:
         producer = self
