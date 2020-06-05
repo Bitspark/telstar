@@ -1,14 +1,21 @@
+from sqlalchemy.dialects import postgresql, mysql, sqlite
 from sqlalchemy.dialects.postgresql import UUID as psqlUUID
 from sqlalchemy.types import TypeDecorator, BINARY
 import uuid
 import json
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, String, Text, Boolean, TIMESTAMP, BIGINT
+from sqlalchemy import Column, String, Text, Boolean, TIMESTAMP, BigInteger
 
 
 Base = declarative_base()
 
 __all__ = ["StagedMessageRepository"]
+
+
+BigIntegerType = BigInteger()
+BigIntegerType = BigIntegerType.with_variant(postgresql.BIGINT(), 'postgresql')
+BigIntegerType = BigIntegerType.with_variant(mysql.BIGINT(), 'mysql')
+BigIntegerType = BigIntegerType.with_variant(sqlite.INTEGER(), 'sqlite')
 
 
 class JsonEncodedDict(TypeDecorator):
@@ -73,7 +80,7 @@ class UUID(TypeDecorator):
 class StagedMessage(Base):
     __tablename__ = 'telstar_staged_message'
 
-    id = Column(BIGINT(), primary_key=True)
+    id = Column(BigIntegerType, primary_key=True)
     msg_uid = Column(UUID(), index=True, nullable=False, default=lambda: uuid.uuid4())
     topic = Column(String(length=255), index=True, nullable=False)
     data = Column(JsonEncodedDict, nullable=False)
