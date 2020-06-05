@@ -9,10 +9,13 @@ import peewee
 from playhouse.db_url import connect
 
 import telstar
-from telstar.com import Message, StagedMessage, MessageError
+from telstar.com import Message, MessageError
+from telstar import config as tlconfig
 from telstar.consumer import Consumer, MultiConsumer, MultiConsumeOnce
 from telstar.producer import StagedProducer
 from marshmallow import fields, Schema, ValidationError
+
+StagedMessage = tlconfig.staging.model
 
 
 @pytest.fixture

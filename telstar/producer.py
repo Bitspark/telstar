@@ -6,7 +6,8 @@ from typing import Callable, List, Optional, Tuple
 from peewee import Database
 from redis.client import Redis
 
-from .com import Message, StagedMessage
+from .com import Message
+from .config import staging
 
 log = logging.getLogger(__name__)
 
@@ -45,22 +46,22 @@ class StagedProducer(Producer):
     def __init__(self, link: Redis, database: Database, batch_size: int = 5, wait: float = 0.5) -> None:
         self.batch_size = batch_size
         self.wait = wait
-        StagedMessage.bind(database)
+        staging.model.bind(database)
 
-        super().__init__(link, self.create_puller(), StagedMessage._meta.database.atomic)
+        super().__init__(link, self.create_puller(), staging.model._meta.database.atomic)
 
     def create_puller(self) -> Callable:
         producer = self
 
         def puller() -> Tuple[List[Message], Callable[[], None]]:
-            unsent_messages = StagedMessage.unsent()[:producer.batch_size]
-            telstar_messages = [msg.to_msg() for msg in unsent_messages]
+            unsent_messages = staging.model.unsent()[:producer.batch_size]
+            telstar_messages = [msg.to_telstar() for msg in unsent_messages]
             log.debug(f"Found {len(telstar_messages)} messages to be send")
 
             def done():
                 if unsent_messages:
                     log.debug(f"Attempting to mark {len(unsent_messages)} messages as being sent")
-                    result = StagedMessage.mark_as_sent(unsent_messages)
+                    result = staging.model.mark_as_sent(unsent_messages)
                     log.debug(f"Result was: {result}")
                 sleep(producer.wait)
 

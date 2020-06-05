@@ -1,6 +1,7 @@
 """
 Telstar is a package to write producer and consumers groups against redis streams.
 """
+from .config import staging
 import inspect
 import logging
 from datetime import datetime
@@ -12,7 +13,7 @@ import redis
 from marshmallow import Schema, ValidationError
 
 from .admin import admin
-from .com import Message, StagedMessage
+from .com import Message
 from .consumer import MultiConsumer, ThreadedMultiConsumer
 
 __version__ = "0.2.5"
@@ -25,12 +26,12 @@ admin = admin
 
 
 def stage(topic: str, data: Dict[str, Union[int, str, datetime, UUID]]) -> UUID:
-    e = StagedMessage.create(topic=topic, data=data)
+    e = staging.model.create(topic=topic, data=data)
     return e.msg_uid
 
 
 def staged() -> List[Message]:
-    return [e.to_msg() for e in StagedMessage.unsent()]
+    return [e.to_telstar() for e in staging.model.unsent()]
 
 
 class app:

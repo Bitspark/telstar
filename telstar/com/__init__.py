@@ -1,10 +1,6 @@
 import json
 import uuid
 from datetime import datetime
-from typing import Dict, Union, List
-
-import peewee
-from peewee import ModelSelect
 
 
 class MessageError(Exception):
@@ -22,15 +18,6 @@ class TelstarEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, o)
 
 
-class JSONField(peewee.TextField):
-    def db_value(self, value: Dict[str, Union[int, str]]) -> str:
-        return json.dumps(value, cls=TelstarEncoder)
-
-    def python_value(self, value: str) -> Dict[str, Union[int, str]]:
-        if value is not None:
-            return json.loads(value)
-
-
 class Message(object):
     IDFieldName = b"message_id"
     DataFieldName = b"data"
@@ -46,27 +33,6 @@ class Message(object):
 
     def __repr__(self):
         return f"<Message self.stream:{self.stream} msd_id:{self.msg_uuid} data:{self.data}>"
-
-
-class StagedMessage(peewee.Model):
-    msg_uid = peewee.UUIDField(default=uuid.uuid4, index=True)
-    topic = peewee.CharField(index=True)
-    data = JSONField()
-
-    sent = peewee.BooleanField(default=False, index=True)
-    created_at = peewee.TimestampField(resolution=10**3)
-
-    @classmethod
-    def unsent(cls) -> ModelSelect:
-        return cls.select().where(cls.sent == False)  # noqa
-
-    @classmethod
-    def mark_as_sent(cls, messages: List["Message"]):
-        ids = list(map(lambda m: m.id, messages))
-        cls.update(sent=True).where(StagedMessage.id << ids).execute()
-
-    def to_msg(self) -> Message:
-        return Message(self.topic, self.msg_uid, self.data)
 
 
 def increment_msg_id(id) -> bytes:
