@@ -75,7 +75,7 @@ def realdb() -> peewee.Database:
         tlconfig.staging.repository = StagedMessagePeeWee
         return peewee_db_setup(connection_uri)
 
-    if os.environ..get("orm") == "sqlalchemy":
+    if os.environ.get("orm") == "sqlalchemy":
         tlconfig.staging.repository = StagedMessageSqlAlchemy
         return sqlalchemy_db_setup(connection_uri)
 
@@ -87,7 +87,7 @@ def db() -> peewee.Database:
         tlconfig.staging.repository = StagedMessagePeeWee
         return peewee_db_setup(connection_uri)
 
-    if os.environ..get("orm") == "sqlalchemy":
+    if os.environ.get("orm") == "sqlalchemy":
         tlconfig.staging.repository = StagedMessageSqlAlchemy
         return sqlalchemy_db_setup(connection_uri)
 
