@@ -36,6 +36,8 @@ jobs:
     parameters:
       command:
         type: string
+      redis_image:
+        type: string
     working_directory: ~/telstar
     docker:
       - image: circleci/python:3.6
@@ -43,7 +45,7 @@ jobs:
           REDIS: redis://localhost:6379/10
           DATABASE: mysql://root:root@127.0.0.1:3306/test
 
-      - image: circleci/redis:5-alpine
+      - image: << parameters.redis_image >>
       - image: circleci/mysql:8-ram
         command: [--default-authentication-plugin=mysql_native_password]
         environment:
@@ -90,14 +92,30 @@ workflows:
           requires:
             - build
 
-      - integration-test:
-          name: integration-resiliency
+      - integration-test-r5:
+          name: integration-resiliency redis 5
+          redis_image: circleci/redis:5-alpine
           command: ./telstar/tests/test_telstar.sh
           requires:
             - build
 
-      - integration-test:
-          name: integration-pytest
+      - integration-test-r6:
+          name: integration-resiliency redis 6
+          redis_image: circleci/redis:6-alpine
+          command: ./telstar/tests/test_telstar.sh
+          requires:
+            - build
+
+      - integration-test-r5:
+          name: integration-pytest redis 5
+          redis_image: circleci/redis:5-alpine
+          command: pytest -m 'integration' --ignore=telstar/
+          requires:
+            - build
+
+      - integration-test-r6:
+          name: integration-pytest redis 6
+          redis_image: circleci/redis:6-alpine
           command: pytest -m 'integration' --ignore=telstar/
           requires:
             - build
@@ -109,5 +127,7 @@ workflows:
                 - master
           requires:
             - test
-            - integration-pytest
-            - integration-resiliency
+            - integration-pytest-r5
+            - integration-resiliency-r5
+            - integration-pytest-r6
+            - integration-resiliency-r6
