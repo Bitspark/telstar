@@ -114,7 +114,7 @@ class MultiConsumer(object):
                 next_after_seen = increment_msg_id(last_seen[stream_name])
                 last_seen[stream_name] = min([before_earliest, next_after_seen])
         # Read all message for the past up until now.
-        log.info(f"Stream: {', '.join(last_seen)} in Group: '{self.group_name}' as Consumer: '{self.consumer_name}' reading past messages")
+        log.info(f"Stream: '{', '.join(last_seen)}' in Group: '{self.group_name}' as Consumer: '{self.consumer_name}' reading past messages")
         self.catchup(last_seen)
 
     # This is the main loop where we start from the history
@@ -129,7 +129,7 @@ class MultiConsumer(object):
         self.transfer_and_process_stream_history(self.streams)
         # With our history processes we can now start waiting for new message to arrive `>`
         config = {k: ">" for k in self.streams}
-        log.info(f"Stream: {', '.join(self.streams)} in Group: '{self.group_name}' as Consumer: '{self.consumer_name}' reading pending message or waiting for new")
+        log.info(f"Stream: '{', '.join(self.streams)}' in Group: '{self.group_name}' as Consumer: '{self.consumer_name}' reading pending message or waiting for new")
         self.read(config, block=self.block)
 
     def get_last_seen_id(self, stream_name: str) -> bytes:
@@ -143,7 +143,7 @@ class MultiConsumer(object):
     #    the UUID for 14 days
     # 3. Acknowledge the message to meaning that we have processed it
     def acknowledge(self, msg: Message, stream_msg_id: bytes) -> None:
-        log.debug(f"Stream: telstar:stream:{msg.stream} in Group: '{self.group_name}' acknowledging Message: {msg.msg_uuid} - {stream_msg_id}")
+        log.debug(f"Stream: 'telstar:stream:{msg.stream}' in Group: '{self.group_name}' acknowledging Message: {msg.msg_uuid} - {stream_msg_id}")
         check_point_key = self._checkpoint_key(f"telstar:stream:{msg.stream}")
         seen_key = self._seen_key(msg)
         # Execute the following statments in a transaction e.g. redis speak `pipeline`
@@ -177,10 +177,10 @@ class MultiConsumer(object):
         key = self._seen_key(msg)
         if self.link.get(key):
             # This is a double send
-            log.debug(f"Stream: telstar:stream:{msg.stream} in Group: {self.group_name} skipping already processed Message: {msg.msg_uuid} - {stream_msg_id} ")
+            log.debug(f"Stream: 'telstar:stream:{msg.stream}' in Group: '{self.group_name}' skipping already processed Message: {msg.msg_uuid} - {stream_msg_id} ")
             return done()
 
-        log.info(f"Stream: telstar:stream:{msg.stream} in Group: {self.group_name} processing Message: {msg.msg_uuid} - {stream_msg_id}")
+        log.info(f"Stream: 'telstar:stream:{msg.stream}' in Group: '{self.group_name}' processing Message: {msg.msg_uuid} - {stream_msg_id}")
         self.processors[stream_name.decode("ascii")](self, msg, done)
 
     # Process all message from `start`
@@ -267,7 +267,7 @@ class MultiConsumeOnce(MultiConsumer):
     def run(self) -> int:
         num_processed = 0
         if self.is_applied():
-            log.info(f"Group: {self.group_name} for Streams: {self.streams} will not run as it already ran")
+            log.info(f"Group: '{self.group_name}' for Streams: '{self.streams}' will not run as it already ran")
             return num_processed
 
         # This is the first time we try to apply this.
