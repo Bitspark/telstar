@@ -26,12 +26,12 @@ admin = admin
 
 
 def stage(topic: str, data: Dict[str, Union[int, str, datetime, UUID]]) -> UUID:
-    e = staging.model.create(topic=topic, data=data)
+    e = staging.repository.create(topic=topic, data=data)
     return e.msg_uid
 
 
 def staged() -> List[Message]:
-    return [e.to_telstar() for e in staging.model.unsent()]
+    return [e.to_telstar() for e in staging.repository.unsent()]
 
 
 class app:

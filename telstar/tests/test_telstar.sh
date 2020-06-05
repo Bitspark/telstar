@@ -45,7 +45,7 @@ fi
 
 main() {
 
-    # Start the first customer with `create` which drops and creates the needed tables in mysql
+    # Start the first customer with `setup` which drops and creates the needed tables in mysql
     CONSUMER_NAME=1 python $SCRIPTPATH/test_consumer.py setup &
     CONSUMER_1=$! # This saves the PID of the last command - which we can use to `kill` the process later
 
