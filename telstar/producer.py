@@ -53,7 +53,7 @@ class StagedProducer(Producer):
         producer = self
 
         def puller() -> Tuple[List[Message], Callable[[], None]]:
-            qs = StagedMessage.unsent().order_by(StagedMessage.id)[:producer.batch_size]
+            qs = StagedMessage.unsent()[:producer.batch_size]
             msgs = [e.to_msg() for e in qs]
             log.debug(f"Found {len(msgs)} messages to be send")
 
