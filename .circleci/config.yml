@@ -109,6 +109,7 @@ workflows:
               orm: [peewee]
           requires:
             - build
+            - test
 
       - release:
           filters:
@@ -116,5 +117,4 @@ workflows:
               only:
                 - master
           requires:
-            - test
             - integration-test

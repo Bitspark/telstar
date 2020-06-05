@@ -71,11 +71,11 @@ def realdb() -> peewee.Database:
     import pymysql
     pymysql.install_as_MySQLdb()
     connection_uri = os.environ.get("DATABASE", "postgres://127.0.0.1:5432/telstar-integration-test")
-    if os.environ.get("orm") == "peewee":
+    if os.environ.get("ORM") == "peewee":
         tlconfig.staging.repository = StagedMessagePeeWee
         return peewee_db_setup(connection_uri)
 
-    if os.environ.get("orm") == "sqlalchemy":
+    if os.environ.get("ORM") == "sqlalchemy":
         tlconfig.staging.repository = StagedMessageSqlAlchemy
         return sqlalchemy_db_setup(connection_uri)
 
@@ -83,11 +83,11 @@ def realdb() -> peewee.Database:
 @pytest.fixture
 def db() -> peewee.Database:
     connection_uri = "sqlite:///:memory:"
-    if os.environ.get("orm") == "peewee":
+    if os.environ.get("ORM") == "peewee":
         tlconfig.staging.repository = StagedMessagePeeWee
         return peewee_db_setup(connection_uri)
 
-    if os.environ.get("orm") == "sqlalchemy":
+    if os.environ.get("ORM") == "sqlalchemy":
         tlconfig.staging.repository = StagedMessageSqlAlchemy
         return sqlalchemy_db_setup(connection_uri)
 
