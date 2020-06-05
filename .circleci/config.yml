@@ -82,7 +82,7 @@ jobs:
           command: |
             source venv/bin/activate
             flit build
-            flit publish
+            flit publish || exit 0
 
 workflows:
   build_and_test:
