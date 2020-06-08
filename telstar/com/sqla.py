@@ -1,5 +1,6 @@
 import json
 import uuid
+from datetime import datetime, timedelta
 
 from sqlalchemy import TIMESTAMP, BigInteger, Boolean, Column, String, Text
 from sqlalchemy.dialects import mysql, postgresql, sqlite
@@ -86,6 +87,7 @@ class StagedMessage(Base):
     data = Column(JsonEncodedDict, nullable=False)
 
     sent = Column(Boolean(), default=False, index=True)
+    send_at = Column(TIMESTAMP())
     created_at = Column(TIMESTAMP())
 
     def to_telstar(self):
@@ -98,6 +100,9 @@ class _StagedMessageRepository:
         self.model: StagedMessage = StagedMessage
 
     def create(self, **kwargs):
+        if "delay" in kwargs:
+            delay = kwargs.pop("delay")
+            kwargs["send_at"] = datetime.now() + timedelta(seconds=delay)
         obj = self.model(**kwargs)
         try:
             self.db.add(obj)
@@ -115,12 +120,14 @@ class _StagedMessageRepository:
         return self.db.begin
 
     def unsent(self):
-        return self.db.query(self.model).filter(self.model.sent == False).order_by(self.model.id)
+        # We look into past when sending
+        # If you remove the timedelta we get strange errors
+        return self.db.query(self.model).filter(self.model.sent == False, self.model.send_at <= datetime.now() + timedelta(seconds=1)).order_by(self.model.id)
 
     def mark_as_sent(self, messages):
         for m in messages:
             m.sent = True
-        self.db.commit()
+        return self.db.commit()
 
 
 StagedMessageRepository = _StagedMessageRepository()
