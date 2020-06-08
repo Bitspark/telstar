@@ -27,7 +27,7 @@ jobs:
     docker:
       - image: circleci/python:3.6
         environment: # environment variables for primary container
-          DATABASE: sqlite:///:memory:
+          DATABASE: "sqlite:///:memory:"
     steps:
       - checkout
       - restore_cache:
