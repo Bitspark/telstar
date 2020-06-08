@@ -1,5 +1,6 @@
 import os
 import uuid
+import time
 from datetime import datetime
 from unittest import mock
 
@@ -260,12 +261,16 @@ def test_staged_producer_done_callback_removes_staged_events(db, link):
 
 
 def test_staged_producer_delay_sending_message(db, link):
-    telstar.stage("mytopic", dict(a=1), delay=10)
+    telstar.stage("mytopic", dict(a=1), delay=4)
     telstar.stage("mytopic", dict(b=1))
     msgs, cb = StagedProducer(link, db, batch_size=10).get_records()
     assert len(msgs) == 1
-    assert len(telstar.staged()) == 2
+    assert len(telstar.staged()) == 1
     cb()
+    msgs, _ = StagedProducer(link, db).get_records()
+    assert len(msgs) == 0
+    assert len(telstar.staged()) == 0
+    time.sleep(5)
     msgs, _ = StagedProducer(link, db).get_records()
     assert len(msgs) == 1
     assert len(telstar.staged()) == 1
