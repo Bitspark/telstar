@@ -5,7 +5,7 @@ import inspect
 import logging
 from datetime import datetime
 from functools import wraps
-from typing import Callable, Dict, List, Union
+from typing import Callable, Dict, List, Union, Optional
 from uuid import UUID
 
 import redis
@@ -25,8 +25,8 @@ log = logging.getLogger(__package__)
 admin = admin
 
 
-def stage(topic: str, data: Dict[str, Union[int, str, datetime, UUID]]) -> UUID:
-    e = staging.repository.create(topic=topic, data=data)
+def stage(topic: str, data: Dict[str, Union[int, str, datetime, UUID]], delay: Optional[int] = None) -> UUID:
+    e = staging.repository.create(topic=topic, data=data, delay=delay or 0)
     return e.msg_uid
 
 

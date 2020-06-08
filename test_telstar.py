@@ -259,6 +259,18 @@ def test_staged_producer_done_callback_removes_staged_events(db, link):
     assert len(telstar.staged()) == 1
 
 
+def test_staged_producer_delay_sending_message(db, link):
+    telstar.stage("mytopic", dict(a=1), delay=10)
+    telstar.stage("mytopic", dict(b=1))
+    msgs, cb = StagedProducer(link, db, batch_size=10).get_records()
+    assert len(msgs) == 1
+    assert len(telstar.staged()) == 2
+    cb()
+    msgs, _ = StagedProducer(link, db).get_records()
+    assert len(msgs) == 1
+    assert len(telstar.staged()) == 1
+
+
 def test_consumer_once_keys(link):
     callback = mock.Mock()
     m = MultiConsumeOnce(link, "testgroup", {"mystream": callback})

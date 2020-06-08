@@ -1,6 +1,7 @@
 # from __future__ import annotations
 import json
 import uuid
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Dict, List, Union
 
 import peewee
@@ -26,16 +27,25 @@ class StagedMessage(peewee.Model):
     data = JSONField()
 
     sent = peewee.BooleanField(default=False, index=True)
+    send_at = peewee.TimestampField(resolution=10**3)
     created_at = peewee.TimestampField(resolution=10**3)
 
     @classmethod
+    def create(cls, **kwargs):
+        if "delay" in kwargs:
+            delay = kwargs.pop("delay")
+            kwargs["send_at"] = datetime.now() + timedelta(seconds=delay)
+        return super().create(**kwargs)
+
+
+    @classmethod
     def unsent(cls) -> ModelSelect:
-        return cls.select().where(cls.sent == False)  # noqa
+        return cls.select().where(cls.sent == False, cls.send_at <= datetime.now())  # noqa
 
     @classmethod
     def mark_as_sent(cls, messages: List["Message"]):
         ids = list(map(lambda m: m.id, messages))
-        cls.update(sent=True).where(StagedMessage.id << ids).execute()
+        cls.update(sent=True).where(cls.id << ids).execute()
 
     @classmethod
     def get_transaction_wrapper(cls):
