@@ -26,6 +26,8 @@ jobs:
     working_directory: ~/telstar
     docker:
       - image: circleci/python:3.6
+        environment: # environment variables for primary container
+          DATABASE: "sqlite:///:memory:"
     steps:
       - checkout
       - restore_cache:

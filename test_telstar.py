@@ -7,6 +7,7 @@ from unittest import mock
 import peewee
 import pytest
 import redis
+import pymysql
 from marshmallow import Schema, ValidationError, fields
 from playhouse.db_url import connect
 from sqlalchemy import create_engine
@@ -20,6 +21,7 @@ from telstar.com.sqla import StagedMessageRepository as StagedMessageSqlAlchemy
 from telstar.consumer import Consumer, MultiConsumeOnce, MultiConsumer
 from telstar.producer import StagedProducer
 
+pymysql.install_as_MySQLdb()
 
 def pytest_configure(config):
     config.addinivalue_line(
@@ -57,20 +59,11 @@ def peewee_db_setup(connection_uri):
 
 
 def sqlalchemy_db_setup(connection_uri):
-    from telstar.com.sqla import Base
-    engine = create_engine(connection_uri, echo=True)
-    Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
-    Session = sessionmaker(bind=engine)
-    session = Session()
-    tlconfig.staging.repository.setup(session)
-    return session
+    engine = create_engine(connection_uri)
+    return engine
 
-
-@pytest.fixture
-def realdb() -> peewee.Database:
-    import pymysql
-    pymysql.install_as_MySQLdb()
+@pytest.fixture(scope="session")
+def db_engine():
     connection_uri = os.environ.get("DATABASE", "postgres://127.0.0.1:5432/telstar-integration-test")
     if os.environ.get("ORM") == "peewee":
         tlconfig.staging.repository = StagedMessagePeeWee
@@ -82,15 +75,26 @@ def realdb() -> peewee.Database:
 
 
 @pytest.fixture
-def db() -> peewee.Database:
-    connection_uri = "sqlite:///:memory:"
+def db_session(db_engine) -> peewee.Database:
     if os.environ.get("ORM") == "peewee":
-        tlconfig.staging.repository = StagedMessagePeeWee
-        return peewee_db_setup(connection_uri)
+        with db_engine.transaction() as txn:
+            yield db_engine
+            txn.rollback()
 
     if os.environ.get("ORM") == "sqlalchemy":
-        tlconfig.staging.repository = StagedMessageSqlAlchemy
-        return sqlalchemy_db_setup(connection_uri)
+        from telstar.com.sqla import Base
+        Base.metadata.create_all(db_engine)
+        connection = db_engine.connect()
+        Session = sessionmaker(bind=db_engine)
+        session = Session()
+        tlconfig.staging.repository.setup(session)
+
+        yield session
+
+        session.rollback()
+        session.close()
+        connection.close()
+        Base.metadata.drop_all(db_engine)
 
 
 @pytest.fixture
@@ -222,59 +226,58 @@ def test_checkpoint_key(consumer: Consumer):
 
 
 @pytest.mark.skipif(not os.environ.get("PEEWEE"), reason="Peewee specific selector")
-def test_staged_event(db):
+def test_staged_event(db_session):
     telstar.stage("mytopic", dict(a=1))
     assert len(tlconfig.staging.repository.select().where(tlconfig.staging.repository.topic == "mytopic")) == 1
 
 
-def test_staged_producer(db, link):
+def test_staged_producer(db_session, link):
     telstar.stage("mytopic", dict(a=1))
-    [msgs], _ = StagedProducer(link, db).get_records()
+    [msgs], _ = StagedProducer(link, db_session).get_records()
     assert msgs.stream == "mytopic"
     assert msgs.data == dict(a=1)
 
 
-def test_encoding_raises_correct_type_error(db, link):
+def test_encoding_raises_correct_type_error(db_session, link):
     now = datetime.now()
     with pytest.raises(TypeError):
         telstar.stage("mytopic", dict(dt=now, mock=mock.MagicMock()))
 
 
-def test_stage_can_encode_types(db, link):
+def test_stage_can_encode_types(db_session, link):
     now = datetime.now()
     uid = uuid.uuid4()
     telstar.stage("mytopic", dict(dt=now, uuid=uid))
-    [msg], cb = StagedProducer(link, db).get_records()
+    [msg], cb = StagedProducer(link, db_session).get_records()
     assert msg.data == {"dt": now.isoformat(), "uuid": str(uid)}
 
 
-def test_staged_producer_done_callback_removes_staged_events(db, link):
+def test_staged_producer_done_callback_removes_staged_events(db_session, link):
     telstar.stage("mytopic", dict(a=1))
     telstar.stage("mytopic", dict(a=1))
-    msgs, cb = StagedProducer(link, db, batch_size=1).get_records()
+    msgs, cb = StagedProducer(link, db_session, batch_size=1).get_records()
     assert len(msgs) == 1
     assert len(telstar.staged()) == 2
     cb()
-    msgs, _ = StagedProducer(link, db).get_records()
+    msgs, _ = StagedProducer(link, db_session).get_records()
     assert len(msgs) == 1
     assert len(telstar.staged()) == 1
 
 
-def test_staged_producer_delay_sending_message(db, link):
+def test_staged_producer_delay_sending_message(db_session, link):
     telstar.stage("mytopic", dict(a=1), delay=4)
     telstar.stage("mytopic", dict(b=1))
-    msgs, cb = StagedProducer(link, db, batch_size=10).get_records()
+    msgs, cb = StagedProducer(link, db_session, batch_size=10).get_records()
     assert len(msgs) == 1
     assert len(telstar.staged()) == 1
     cb()
-    msgs, _ = StagedProducer(link, db).get_records()
+    msgs, _ = StagedProducer(link, db_session).get_records()
     assert len(msgs) == 0
     assert len(telstar.staged()) == 0
     time.sleep(5)
-    msgs, _ = StagedProducer(link, db).get_records()
+    msgs, _ = StagedProducer(link, db_session).get_records()
     assert len(msgs) == 1
     assert len(telstar.staged()) == 1
-
 
 def test_consumer_once_keys(link):
     callback = mock.Mock()
@@ -283,7 +286,7 @@ def test_consumer_once_keys(link):
 
 
 @pytest.mark.integration
-def test_app_pattern(realdb, reallink, msg_schema):
+def test_app_pattern(db_session, reallink, msg_schema):
     app = telstar.app(reallink, consumer_name="c1")
     m = mock.Mock()
 
@@ -293,14 +296,14 @@ def test_app_pattern(realdb, reallink, msg_schema):
 
     telstar.stage("mytopic", dict(name="1", email="a@b.com"))
     telstar.stage("mytopic2", dict(name="1", email="a@b.com"))
-    StagedProducer(reallink, realdb).run_once()
+    StagedProducer(reallink, db_session).run_once()
 
     app.run_once()
     assert m.call_count == 2
 
 
 @pytest.mark.integration
-def test_app_consumer_strictness(realdb, reallink, msg_schema):
+def test_app_consumer_strictness(db_session, reallink, msg_schema):
     app = telstar.app(reallink, consumer_name="c1")
 
     @app.consumer("group", "mytopic", schema=msg_schema, strict=True)
@@ -308,14 +311,14 @@ def test_app_consumer_strictness(realdb, reallink, msg_schema):
         print(data)
 
     telstar.stage("mytopic", dict(name="1", email="invalid"))
-    StagedProducer(reallink, realdb).run_once()
+    StagedProducer(reallink, db_session).run_once()
 
     with pytest.raises(ValidationError):
         app.run_once()
 
 
 @pytest.mark.integration
-def test_app_consumer_errorhandler(realdb, reallink, msg_schema):
+def test_app_consumer_errorhandler(db_session, reallink, msg_schema):
     app = telstar.app(reallink, consumer_name="c1")
     m = mock.Mock()
 
@@ -328,14 +331,14 @@ def test_app_consumer_errorhandler(realdb, reallink, msg_schema):
         m()
 
     telstar.stage("mytopic", dict(name="1", email="invalid"))
-    StagedProducer(reallink, realdb).run_once()
+    StagedProducer(reallink, db_session).run_once()
 
     app.run_once()
     assert m.call_count == 1
 
 
 @pytest.mark.integration
-def test_app_consumer_errorhandler_can_acknowledge(realdb, reallink, msg_schema):
+def test_app_consumer_errorhandler_can_acknowledge(db_session, reallink, msg_schema):
     app = telstar.app(reallink, consumer_name="c1")
     m = mock.Mock()
 
@@ -349,7 +352,7 @@ def test_app_consumer_errorhandler_can_acknowledge(realdb, reallink, msg_schema)
         ack()
 
     telstar.stage("mytopic", dict(name="1", email="invalid"))
-    StagedProducer(reallink, realdb).run_once()
+    StagedProducer(reallink, db_session).run_once()
 
     app.run_once()
     app.run_once()
@@ -357,7 +360,7 @@ def test_app_consumer_errorhandler_can_acknowledge(realdb, reallink, msg_schema)
 
 
 @pytest.mark.integration
-def test_app_consumer_invalid_message(realdb, reallink: redis.Redis, msg_schema):
+def test_app_consumer_invalid_message(db_session, reallink: redis.Redis, msg_schema):
     app = telstar.app(reallink, consumer_name="c1")
     m = mock.Mock()
 
@@ -377,7 +380,7 @@ def test_app_consumer_invalid_message(realdb, reallink: redis.Redis, msg_schema)
 
 
 @pytest.mark.integration
-def test_app_consumer_ack_invalid(realdb, reallink, mocker, msg_schema):
+def test_app_consumer_ack_invalid(db_session, reallink, mocker, msg_schema):
     app = telstar.app(reallink, consumer_name="c1")
 
     @app.consumer("group", "mytopic", schema=msg_schema, acknowledge_invalid=True, strict=False)
@@ -385,7 +388,7 @@ def test_app_consumer_ack_invalid(realdb, reallink, mocker, msg_schema):
         pass
 
     telstar.stage("mytopic", dict(name="1", email="a@b.com"))
-    StagedProducer(reallink, realdb).run_once()
+    StagedProducer(reallink, db_session).run_once()
 
     ack = mocker.spy(MultiConsumer, "acknowledge")
     app.run_once()
@@ -393,7 +396,7 @@ def test_app_consumer_ack_invalid(realdb, reallink, mocker, msg_schema):
 
 
 @pytest.mark.integration
-def test_app_consumer_do_not_ack_invalid(realdb, reallink, mocker, msg_schema):
+def test_app_consumer_do_not_ack_invalid(db_session, reallink, mocker, msg_schema):
     app = telstar.app(reallink, consumer_name="c1")
     m = mock.Mock()
 
@@ -402,7 +405,7 @@ def test_app_consumer_do_not_ack_invalid(realdb, reallink, mocker, msg_schema):
         m()
 
     telstar.stage("mytopic", dict(name="1", email="invalid"))
-    StagedProducer(reallink, realdb).run_once()
+    StagedProducer(reallink, db_session).run_once()
 
     ack = mocker.spy(MultiConsumer, "acknowledge")
     app.run_once()
@@ -411,7 +414,7 @@ def test_app_consumer_do_not_ack_invalid(realdb, reallink, mocker, msg_schema):
 
 
 @pytest.mark.integration
-def test_app_consumer_full_message(realdb, reallink, mocker, msg_schema):
+def test_app_consumer_full_message(db_session, reallink, mocker, msg_schema):
     app = telstar.app(reallink, consumer_name="c1")
     m = mock.Mock()
 
@@ -420,7 +423,7 @@ def test_app_consumer_full_message(realdb, reallink, mocker, msg_schema):
         m(data)
 
     telstar.stage("mytopic", dict(name="1", email="a@b.com"))
-    StagedProducer(reallink, realdb).run_once()
+    StagedProducer(reallink, db_session).run_once()
 
     app.run_once()
     [msg, ] = m.call_args[0]
@@ -429,7 +432,7 @@ def test_app_consumer_full_message(realdb, reallink, mocker, msg_schema):
 
 
 @pytest.mark.integration
-def test_consumer_once(realdb, reallink):
+def test_consumer_once(db_session, reallink):
     result = list()
     for i in range(10):
         telstar.stage("mytopic", dict(i=i))
@@ -440,7 +443,7 @@ def test_consumer_once(realdb, reallink):
             result.append(data)
             done()
 
-    sp = StagedProducer(reallink, realdb, batch_size=100)
+    sp = StagedProducer(reallink, db_session, batch_size=100)
     sp.run_once()
 
     m = MultiConsumeOnce(reallink, "mytest", {"mytopic": callback})
@@ -456,12 +459,12 @@ def test_consumer_once(realdb, reallink):
 
 
 @pytest.mark.integration
-def test_admin_basics(reallink, realdb, msg_schema):
+def test_admin_basics(reallink, db_session, msg_schema):
     app = telstar.app(reallink, consumer_name="c1")
     admin = telstar.admin(reallink)
     telstar.stage("mytopic", dict(name="1", email="a@b.com"))
 
-    sp = StagedProducer(reallink, realdb, batch_size=100)
+    sp = StagedProducer(reallink, db_session, batch_size=100)
     sp.run_once()
 
     [stream] = admin.get_streams()
@@ -491,12 +494,12 @@ def test_admin_basics(reallink, realdb, msg_schema):
 
 
 @pytest.mark.integration
-def test_admin_group_deletion(reallink, realdb, msg_schema):
+def test_admin_group_deletion(reallink, db_session, msg_schema):
     app = telstar.app(reallink, consumer_name="c1")
     admin = telstar.admin(reallink)
     telstar.stage("mytopic", dict(name="1", email="a@b.com"))
 
-    sp = StagedProducer(reallink, realdb, batch_size=100)
+    sp = StagedProducer(reallink, db_session, batch_size=100)
     sp.run_once()
 
     @app.consumer("group", "mytopic", schema=msg_schema)
@@ -514,13 +517,13 @@ def test_admin_group_deletion(reallink, realdb, msg_schema):
 
 
 @pytest.mark.integration
-def test_admin_read_pending_message(reallink, realdb, msg_schema):
+def test_admin_read_pending_message(reallink, db_session, msg_schema):
     app = telstar.app(reallink, consumer_name="c1")
     admin = telstar.admin(reallink)
     data = dict(name="1", email="a@b.com")
     telstar.stage("mytopic", data)
 
-    sp = StagedProducer(reallink, realdb, batch_size=100)
+    sp = StagedProducer(reallink, db_session, batch_size=100)
     sp.run_once()
 
     @app.consumer("group", "mytopic", schema=msg_schema, acknowledge_invalid=False, strict=False)
@@ -537,12 +540,12 @@ def test_admin_read_pending_message(reallink, realdb, msg_schema):
 
 
 @pytest.mark.integration
-def test_admin_consumer_deletion(reallink, realdb, msg_schema):
+def test_admin_consumer_deletion(reallink, db_session, msg_schema):
     app = telstar.app(reallink, consumer_name="c1")
     admin = telstar.admin(reallink)
     telstar.stage("mytopic", dict(name="1", email="a@b.com"))
 
-    sp = StagedProducer(reallink, realdb, batch_size=100)
+    sp = StagedProducer(reallink, db_session, batch_size=100)
     sp.run_once()
 
     @app.consumer("group", "mytopic", schema=msg_schema)
@@ -561,7 +564,7 @@ def test_admin_consumer_deletion(reallink, realdb, msg_schema):
 
 
 @pytest.mark.integration
-def test_consume_order(realdb, reallink):
+def test_consume_order(db_session, reallink):
     result = list()
     telstar.stage("mytopic", dict(i=1))
     telstar.stage("mytopic2", dict(i=2))
@@ -581,7 +584,7 @@ def test_consume_order(realdb, reallink):
         result.append(data)
         done()
 
-    sp = StagedProducer(reallink, realdb, batch_size=100)
+    sp = StagedProducer(reallink, db_session, batch_size=100)
     sp.run_once()
     m = MultiConsumeOnce(reallink, "mytest", {"mytopic": callback, "mytopic2": callback})
     m.run()
