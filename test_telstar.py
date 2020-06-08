@@ -59,10 +59,7 @@ def peewee_db_setup(connection_uri):
 
 
 def sqlalchemy_db_setup(connection_uri):
-    from telstar.com.sqla import Base
     engine = create_engine(connection_uri)
-    Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
     return engine
 
 @pytest.fixture(scope="session")
@@ -85,6 +82,8 @@ def db_session(db_engine) -> peewee.Database:
             txn.rollback()
 
     if os.environ.get("ORM") == "sqlalchemy":
+        from telstar.com.sqla import Base
+        Base.metadata.create_all(db_engine)
         connection = db_engine.connect()
         Session = sessionmaker(bind=db_engine)
         session = Session()
@@ -95,6 +94,7 @@ def db_session(db_engine) -> peewee.Database:
         session.rollback()
         session.close()
         connection.close()
+        Base.metadata.drop_all(db_engine)
 
 
 @pytest.fixture
