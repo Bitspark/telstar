@@ -12,6 +12,7 @@ from marshmallow import Schema, ValidationError, fields
 from playhouse.db_url import connect
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import StatementError
 
 import telstar
 from telstar import config as tlconfig
@@ -62,39 +63,56 @@ def sqlalchemy_db_setup(connection_uri):
     engine = create_engine(connection_uri)
     return engine
 
+pytest.mark.only_sqla = pytest.mark.skipif(os.environ.get("ORM") != "sqlalchemy", reason="Not supported by peewee")
+pytest.mark.only_peewee = pytest.mark.skipif(os.environ.get("ORM") == "sqlalchemy", reason="Not supported by sql")
+
 @pytest.fixture(scope="session")
 def db_engine():
     connection_uri = os.environ.get("DATABASE", "postgres://127.0.0.1:5432/telstar-integration-test")
     if os.environ.get("ORM") == "peewee":
         tlconfig.staging.repository = StagedMessagePeeWee
-        return peewee_db_setup(connection_uri)
-
-    if os.environ.get("ORM") == "sqlalchemy":
-        tlconfig.staging.repository = StagedMessageSqlAlchemy
-        return sqlalchemy_db_setup(connection_uri)
-
-
-@pytest.fixture
-def db_session(db_engine) -> peewee.Database:
-    if os.environ.get("ORM") == "peewee":
-        with db_engine.transaction() as txn:
-            yield db_engine
-            txn.rollback()
+        yield peewee_db_setup(connection_uri)
 
     if os.environ.get("ORM") == "sqlalchemy":
         from telstar.com.sqla import Base
+        tlconfig.staging.repository = StagedMessageSqlAlchemy
+        db_engine = sqlalchemy_db_setup(connection_uri)
         Base.metadata.create_all(db_engine)
+
+        yield db_engine
+
+        Base.metadata.drop_all(db_engine)
+
+
+@pytest.fixture
+def session_maker(db_engine) -> peewee.Database:
+    if os.environ.get("ORM") == "peewee":
+        yield db_engine
+
+    if os.environ.get("ORM") == "sqlalchemy":
         connection = db_engine.connect()
         Session = sessionmaker(bind=db_engine)
-        session = Session()
+
+        yield Session
+
+        connection.close()
+
+
+@pytest.fixture
+def db_session(session_maker) -> peewee.Database:
+    if os.environ.get("ORM") == "peewee":
+        with session_maker.transaction() as txn:
+            yield session_maker
+            txn.rollback()
+
+    if os.environ.get("ORM") == "sqlalchemy":
+        session = session_maker()
         tlconfig.staging.repository.setup(session)
 
         yield session
 
         session.rollback()
         session.close()
-        connection.close()
-        Base.metadata.drop_all(db_engine)
 
 
 @pytest.fixture
@@ -225,7 +243,7 @@ def test_checkpoint_key(consumer: Consumer):
     assert consumer._checkpoint_key("mytopic") == "telstar:checkpoint:mytopic:cg:mygroup:myname"
 
 
-@pytest.mark.skipif(not os.environ.get("PEEWEE"), reason="Peewee specific selector")
+@pytest.mark.only_peewee
 def test_staged_event(db_session):
     telstar.stage("mytopic", dict(a=1))
     assert len(tlconfig.staging.repository.select().where(tlconfig.staging.repository.topic == "mytopic")) == 1
@@ -240,8 +258,14 @@ def test_staged_producer(db_session, link):
 
 def test_encoding_raises_correct_type_error(db_session, link):
     now = datetime.now()
-    with pytest.raises(TypeError):
+
+    Error = TypeError
+    if os.environ["ORM"] == "sqlalchemy":
+        Error = StatementError
+
+    with pytest.raises(Error):
         telstar.stage("mytopic", dict(dt=now, mock=mock.MagicMock()))
+        db_session.commit()
 
 
 def test_stage_can_encode_types(db_session, link):
@@ -263,6 +287,23 @@ def test_staged_producer_done_callback_removes_staged_events(db_session, link):
     assert len(msgs) == 1
     assert len(telstar.staged()) == 1
 
+
+@pytest.mark.only_sqla
+def test_staged_producer_context_callable(session_maker, link):
+    session = session_maker(autocommit=True)
+    tlconfig.staging.repository.setup(session)
+
+    with session.begin():
+        telstar.stage("mytopic", dict(a=1))
+        telstar.stage("mytopic", dict(b=1))
+
+    sp = StagedProducer(link, session, batch_size=10)
+
+    with sp.context_callable():
+        sp.run_once()
+
+    with sp.context_callable():
+        sp.run_once()
 
 def test_staged_producer_delay_sending_message(db_session, link):
     telstar.stage("mytopic", dict(a=1), delay=4)
