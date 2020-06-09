@@ -104,13 +104,7 @@ class _StagedMessageRepository:
             delay = kwargs.pop("delay")
             kwargs["send_at"] = datetime.now() + timedelta(seconds=delay)
         obj = self.model(**kwargs)
-        try:
-            self.db.add(obj)
-            self.db.commit()
-        except Exception as e:
-            if e.orig:
-                raise e.orig  # Surface the type error that might happen when the json is invalid
-            raise e
+        self.db.add(obj)
         return obj
 
     def setup(self, database):
@@ -127,7 +121,6 @@ class _StagedMessageRepository:
     def mark_as_sent(self, messages):
         for m in messages:
             m.sent = True
-        return self.db.commit()
 
 
 StagedMessageRepository = _StagedMessageRepository()
