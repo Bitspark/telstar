@@ -1,6 +1,6 @@
 Click==7.1.2
 MonkeyType==20.5.0
-PyMySQL==0.9.3
+PyMySQL==0.10.0
 Pygments==2.6.1
 SQLAlchemy==1.3.17
 appnope==0.1.0
