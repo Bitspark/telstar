@@ -16,7 +16,7 @@ decorator==4.4.0
 docutils==0.16
 entrypoints==0.3
 flake8==3.8.3
-flit-core==2.3.0
+flit-core==3.0.0
 flit==2.3.0
 idna==2.9
 importlib-metadata==1.6.1
