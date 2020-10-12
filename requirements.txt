@@ -50,7 +50,7 @@ pytest==5.4.3
 pytoml==0.1.21
 redis==3.5.3
 requests==2.23.0
-retype==19.9.0
+retype==20.10.0
 rope==0.17.0
 six==1.15.0
 telstar==1.0.1
