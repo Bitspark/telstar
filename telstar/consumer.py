@@ -225,7 +225,7 @@ class MultiConsumer(object):
             raise exc
 
         bare_ack = partial(self._bare_ack, stream_name, stream_msg_id)
-        return handler(exc, bare_ack)
+        return handler(exc, bare_ack, record)
 
     def _bare_ack(self, stream_name, stream_msg_id):
         check_point_key = self._checkpoint_key(stream_name)

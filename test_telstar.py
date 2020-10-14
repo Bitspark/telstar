@@ -368,7 +368,7 @@ def test_app_consumer_errorhandler(db_session, reallink, msg_schema):
         print(data)
 
     @app.errorhandler(ValidationError)
-    def handler(exc, ack):
+    def handler(exc, ack, rec):
         m()
 
     telstar.stage("mytopic", dict(name="1", email="invalid"))
@@ -388,7 +388,7 @@ def test_app_consumer_errorhandler_can_acknowledge(db_session, reallink, msg_sch
         print(data)
 
     @app.errorhandler(ValidationError)
-    def handler(exc, ack):
+    def handler(exc, ack, rec):
         m()
         ack()
 
@@ -398,6 +398,28 @@ def test_app_consumer_errorhandler_can_acknowledge(db_session, reallink, msg_sch
     app.run_once()
     app.run_once()
     assert m.call_count == 1  # The message is ack'ed in the error handler
+
+@pytest.mark.integration
+def test_app_consumer_errorhandler_receives_record(db_session, reallink, msg_schema):
+    app = telstar.app(reallink, consumer_name="c1")
+    m = mock.Mock()
+
+    @app.consumer("group", "mytopic", schema=msg_schema, strict=True)
+    def callback(data: dict):
+        print(data)
+
+    @app.errorhandler(ValidationError)
+    def handler(exc, ack, record):
+        m(record)
+        ack()
+
+    telstar.stage("mytopic", dict(name="1", email="invalid"))
+    StagedProducer(reallink, db_session).run_once()
+
+    app.run_once()
+    assert m.call_count == 1  # The message is ack'ed in the error handler
+    [msg, ] = m.call_args[0]
+    assert msg[b"data"] == b'{"name": "1", "email": "invalid"}'
 
 
 @pytest.mark.integration
@@ -410,7 +432,7 @@ def test_app_consumer_invalid_message(db_session, reallink: redis.Redis, msg_sch
         print(data)
 
     @app.errorhandler(MessageError)
-    def handler(exc, ack):
+    def handler(exc, ack, rec):
         m()
         ack()
 
