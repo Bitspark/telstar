@@ -16,7 +16,7 @@ from .com import Message
 from .config import staging
 from .consumer import MultiConsumer, ThreadedMultiConsumer
 
-__version__ = "1.0.1"
+__version__ = "1.1.0"
 
 
 logging.getLogger(__package__).addHandler(logging.NullHandler())
