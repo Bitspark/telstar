@@ -7,6 +7,7 @@ from sqlalchemy.dialects import mysql, postgresql, sqlite
 from sqlalchemy.dialects.postgresql import UUID as psqlUUID
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.types import BINARY, TypeDecorator
+from sqlalchemy.sql import functions as func
 
 Base = declarative_base()
 
@@ -88,7 +89,7 @@ class StagedMessage(Base):
 
     sent = Column(Boolean(), default=False, index=True)
     send_at = Column(TIMESTAMP())
-    created_at = Column(TIMESTAMP())
+    created_at = Column(TIMESTAMP(), server_default=func.now())
 
     def to_telstar(self):
         from . import Message
