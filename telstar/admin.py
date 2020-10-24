@@ -87,6 +87,12 @@ class AdminMessage:
         self.time_since_delivered = time_since_delivered
         self.times_delivered = times_delivered
 
+    def remove(self):
+        pipe = self.group.stream.admin.link.pipeline()
+        pipe.xack(self.group.stream.name, self.group.name, self.message_id)
+        pipe.xdel(self.group.stream.name, self.message_id)
+        pipe.execute()
+
     def read_raw(self) -> List[List[Union[bytes, List[Tuple[bytes, Dict[bytes, bytes]]]]]]:
         return self.group.stream.admin.link.xread({
             self.group.stream.name: decrement_msg_id(self.message_id)

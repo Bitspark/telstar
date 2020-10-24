@@ -580,6 +580,43 @@ def test_admin_group_deletion(reallink, db_session, msg_schema):
 
 
 @pytest.mark.integration
+def test_admin_message_removal(reallink, db_session, msg_schema):
+    app = telstar.app(reallink, consumer_name="c1")
+    admin = telstar.admin(reallink)
+    m = mock.Mock()
+
+    telstar.stage("mytopic", dict(name="1", email="a@b.com"))
+
+
+    sp = StagedProducer(reallink, db_session, batch_size=100)
+    sp.run_once()
+
+    @app.consumer("group", "mytopic", schema=msg_schema)
+    def callback(data: Message):
+        raise MessageError()
+
+    @app.errorhandler(MessageError)
+    def handler(exc, ack, rec):
+        m()
+
+    app.run_once()
+    app.run_once()
+
+    [stream] = admin.get_streams()
+    [msg] = stream.get_pending_messages()
+
+    assert m.call_count == 2  # The message is ack'ed in the error handler
+    assert msg.times_delivered == 2
+
+    __import__('pudb').set_trace()
+    msg.remove()
+    app.run_once()
+
+    # Message has been remove this not delivering again
+    assert m.call_count != 3
+
+
+@pytest.mark.integration
 def test_admin_read_pending_message(reallink, db_session, msg_schema):
     app = telstar.app(reallink, consumer_name="c1")
     admin = telstar.admin(reallink)
