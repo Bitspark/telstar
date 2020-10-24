@@ -608,7 +608,6 @@ def test_admin_message_removal(reallink, db_session, msg_schema):
     assert m.call_count == 2  # The message is ack'ed in the error handler
     assert msg.times_delivered == 2
 
-    __import__('pudb').set_trace()
     msg.remove()
     app.run_once()
 
