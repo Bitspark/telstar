@@ -342,6 +342,16 @@ def test_app_pattern(db_session, reallink, msg_schema):
     app.run_once()
     assert m.call_count == 2
 
+@pytest.mark.integration
+def test_app_decoration_returns_function(db_session, reallink, msg_schema):
+    app = telstar.app(reallink, consumer_name="c1")
+
+    @app.consumer("group", ["mytopic", "mytopic2"], schema=msg_schema)
+    def callback(data: dict):
+        pass
+
+    assert callback is not None
+
 
 @pytest.mark.integration
 def test_app_consumer_strictness(db_session, reallink, msg_schema):

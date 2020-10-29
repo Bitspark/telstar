@@ -16,7 +16,7 @@ from .com import Message
 from .config import staging
 from .consumer import MultiConsumer, ThreadedMultiConsumer
 
-__version__ = "1.1.2"
+__version__ = "1.1.3"
 
 
 logging.getLogger(__package__).addHandler(logging.NullHandler())
@@ -89,5 +89,6 @@ class app:
                     self.config[group][stream] = actual_consumer
                 else:
                     self.config[group] = {stream: actual_consumer}
+            return fn
 
         return decorator
