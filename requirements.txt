@@ -30,7 +30,7 @@ mccabe==0.6.1
 more-itertools==8.4.0
 packaging==20.4
 parso==0.7.0
-peewee==3.13.3
+peewee==3.14.0
 pexpect==4.8.0
 pickleshare==0.7.5
 pluggy==0.13.1
